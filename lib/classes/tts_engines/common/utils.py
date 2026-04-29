@@ -474,7 +474,7 @@ class TTSUtils:
                             }.items()
                             if self.session.get(key) is not None
                         }
-                        with torch.no_grad():
+                        with torch.inference_mode():
                             engine.to(device)
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                 result = engine.inference(
@@ -599,6 +599,10 @@ class TTSUtils:
         return current_voice, None
         
     def _split_sentence_on_sml(self, sentence:str)->list[str]:
+        # Fast path: SML tags always begin with '['.  The vast majority of book sentences
+        # contain no SML at all, so skip the regex finditer + list-building entirely.
+        if '[' not in sentence:
+            return [sentence] if sentence else []
         parts:list[str] = []
         last = 0
         for m in SML_TAG_PATTERN.finditer(sentence):

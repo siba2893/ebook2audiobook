@@ -73,6 +73,9 @@ class YourTTS(TTSUtils, TTSRegistry, name='yourtts'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
+                # Keep model on GPU across the per-part loop (was shuffled per-sentence).
+                if device != devices['CPU']['proc']:
+                    self.engine.to(device)
                 language = self.session['language_iso1'] if self.session['language_iso1'] == 'en' else 'fr-fr' if self.session['language_iso1'] == 'fr' else 'pt-br' if self.session['language_iso1'] == 'pt' else 'en'
                 sentence_parts = self._split_sentence_on_sml(sentence)
                 not_supported_punc_pattern = re.compile(r'[—]')
@@ -111,14 +114,12 @@ class YourTTS(TTSUtils, TTSRegistry, name='yourtts'):
                             self.speaker = default_engine_settings[self.session['tts_engine']]['voices']['ElectroMale-2']
                             speaker_argument = {"speaker": self.speaker}                        
                         with torch.inference_mode():
-                            self.engine.to(device)
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                 audio_part = self.engine.tts(
                                     text=part,
                                     language=language,
                                     **speaker_argument
                                 )
-                            self.engine.to(devices['CPU']['proc'])
                         if is_audio_data_valid(audio_part):
                             src_tensor = self._tensor_type(audio_part)
                             part_tensor = src_tensor.cpu().unsqueeze(0)

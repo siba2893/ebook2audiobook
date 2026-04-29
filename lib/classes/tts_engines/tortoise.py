@@ -83,6 +83,9 @@ class Tortoise(TTSUtils, TTSRegistry, name='tortoise'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
+                # Keep model on GPU across the per-part loop (was shuffled per-sentence).
+                if device != devices['CPU']['proc']:
+                    self.engine.to(device)
                 sentence_parts = self._split_sentence_on_sml(sentence)
                 not_supported_punc_pattern = re.compile(r'[—]')
                 self.params['block_voice'] = kwargs.get('block_voice', self.session['voice'])
@@ -120,7 +123,6 @@ class Tortoise(TTSUtils, TTSRegistry, name='tortoise'):
                         else:
                             speaker_argument = {"speaker": self.speaker, "preset": "ultra_fast"}
                         with torch.inference_mode():
-                            self.engine.to(device)
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                 audio_part = self.engine.tts(
                                     text=part,
@@ -128,7 +130,6 @@ class Tortoise(TTSUtils, TTSRegistry, name='tortoise'):
                                     diffusion_iterations=10,
                                     **speaker_argument
                                 )
-                            self.engine.to(devices['CPU']['proc'])
                         if is_audio_data_valid(audio_part):
                             src_tensor = self._tensor_type(audio_part)
                             part_tensor = src_tensor.cpu().unsqueeze(0)
