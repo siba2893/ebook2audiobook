@@ -354,10 +354,13 @@ class TTSUtils:
 
     def _load_checkpoint(self,**kwargs:Any)->Any:
         try:
+            import torch
             with _lock:
                 key = kwargs.get('key')
-                engine = loaded_tts.get(key, False)
-                if not engine:
+                engine = loaded_tts.get(key)
+                # `is None` rather than truthy: torch.compile wraps Xtts in
+                # OptimizedModule, whose __bool__ raises for nn.Modules without __len__.
+                if engine is None:
                     engine_name = kwargs.get('tts_engine', None)
                     from TTS.tts.configs.xtts_config import XttsConfig
                     from TTS.tts.models.xtts import Xtts
@@ -381,8 +384,8 @@ class TTSUtils:
                         checkpoint_path = checkpoint_path,
                         vocab_path = vocab_path,
                         eval = True
-                    ) 
-                if engine:
+                    )
+                if engine is not None:
                     vram_dict = VRAMDetector().detect_vram(self.session['device'], self.session['script_mode'])
                     self.session['free_vram_gb'] = vram_dict.get('free_vram_gb', 0)
                     models_loaded_size_gb = self._loaded_tts_size_gb(loaded_tts)
@@ -453,8 +456,8 @@ class TTSUtils:
                     key = f'{xtts}-internal'
                     default_text = Path(default_text_file).read_text(encoding='utf-8')
                     self.cleanup_memory()
-                    engine = loaded_tts.get(key, False)
-                    if not engine:
+                    engine = loaded_tts.get(key)
+                    if engine is None:
                         vram_dict = VRAMDetector().detect_vram(self.session['device'], self.session['script_mode'])
                         self.session['free_vram_gb'] = vram_dict.get('free_vram_gb', 0)
                         models_loaded_size_gb = self._loaded_tts_size_gb(loaded_tts)
@@ -466,7 +469,7 @@ class TTSUtils:
                         checkpoint_path = hf_hub_download(repo_id=hf_repo, filename=f"{hf_sub}{default_engine_settings[xtts]['files'][1]}", cache_dir=self.cache_dir)
                         vocab_path = hf_hub_download(repo_id=hf_repo, filename=f"{hf_sub}{default_engine_settings[xtts]['files'][2]}", cache_dir=self.cache_dir)
                         engine = self._load_checkpoint(tts_engine=xtts, key=key, checkpoint_path=checkpoint_path, config_path=config_path, vocab_path=vocab_path)
-                    if engine:
+                    if engine is not None:
                         device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
                         if speaker in default_engine_settings[xtts]['voices'].keys():
                             gpt_cond_latent, speaker_embedding = self.xtts_speakers[default_engine_settings[xtts]['voices'][speaker]].values()
@@ -516,8 +519,8 @@ class TTSUtils:
                                     del audio_sentence, sourceTensor, audio_tensor
                                     Path(proc_current_voice).unlink(missing_ok=True)
                                     gc.collect()
-                                    self.engine = loaded_tts.get(self.tts_key, False)
-                                    if not self.engine:
+                                    self.engine = loaded_tts.get(self.tts_key)
+                                    if self.engine is None:
                                         self._load_engine()
                                     return new_current_voice
                                 else:

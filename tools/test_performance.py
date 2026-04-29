@@ -41,11 +41,14 @@ def _make_session():
         'fine_tuned': 'internal',
         'free_vram_gb': 8.0,
         'device': 'cuda:0',
+        'script_mode': 'native',
         'language': 'en',
         'language_iso1': 'en',
         'voice': 'default_voice',
         'custom_model': None,
+        'custom_model_dir': '',
         'voice_dir': 'tmp/voices',
+        'is_gui_process': False,
         'xtts_temperature': 0.75,
         'xtts_length_penalty': 1.0,
         'xtts_repetition_penalty': 5.0,
@@ -92,13 +95,17 @@ class TestPerformanceOptimizations(unittest.TestCase):
 
         # Prefer torchaudio; fall back to soundfile if torchaudio.save is broken.
         if _TORCHAUDIO_AVAILABLE and hasattr(torchaudio, 'save'):
+            # Warm-up call: first save loads torchcodec native libs (~500 ms one-time
+            # cost on Windows). Subsequent saves measure steady-state I/O speed.
+            torchaudio.save(test_file, dummy_audio, sample_rate)
             start = time.time()
             torchaudio.save(test_file, dummy_audio, sample_rate)
             elapsed = time.time() - start
             self.assertTrue(os.path.exists(test_file), "torchaudio.save failed to create file")
             self.assertLess(elapsed, 0.5, f"WAV save too slow ({elapsed:.3f}s); check I/O contention")
-            info = torchaudio.info(test_file)
-            self.assertEqual(info.sample_rate, sample_rate)
+            # torchaudio 2.11 removed torchaudio.info — use soundfile (always available).
+            import soundfile as sf
+            self.assertEqual(sf.info(test_file).samplerate, sample_rate)
         else:
             import soundfile as sf
             audio_np = dummy_audio.squeeze().numpy().astype(np.float32)

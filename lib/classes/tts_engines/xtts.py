@@ -47,7 +47,9 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
         try:
             from huggingface_hub import hf_hub_download
             engine = loaded_tts.get(self.tts_key)
-            if engine:
+            # Use `is not None` because torch.compile wraps the model in an
+            # OptimizedModule that raises on __bool__ for nn.Modules without __len__.
+            if engine is not None:
                 msg = f'TTS {self.tts_key} model already loaded, reusing cached engine.'
                 print(msg)
                 return engine
@@ -81,7 +83,7 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                 except Exception as e:
                     error = f'load_engine(): HuggingFace checkpoint loading failed: {e}'
                     raise RuntimeError(error) from e
-            if engine:
+            if engine is not None:
                 try:
                     import deepspeed
                     engine = deepspeed.init_inference(
@@ -111,7 +113,7 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
             import torchaudio
             import numpy as np
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
-            if self.engine:
+            if self.engine is not None:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
                 if device != devices['CPU']['proc']:
                     self.engine.to(device)
