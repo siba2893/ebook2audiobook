@@ -156,7 +156,7 @@ class TTSUtils:
             if len(xtts_builtin_speakers_list) > 0:
                 return xtts_builtin_speakers_list
             speakers_path = hf_hub_download(repo_id=default_engine_settings[TTS_ENGINES['XTTSv2']]['repo'], filename='speakers_xtts.pth', cache_dir=tts_dir)
-            loaded = torch.load(speakers_path, weights_only=False)
+            loaded = torch.load(speakers_path, map_location='cpu', weights_only=False)
             if not isinstance(loaded, dict):
                 error = f'Invalid XTTS speakers format: {type(loaded)}'
                 raise TypeError(error)
@@ -231,14 +231,6 @@ class TTSUtils:
                 is_cuda and not is_jetson and not is_rocm
                 and cc_major >= 8 and quality_mode
             )
-            # SDP attention — flash + mem-efficient are Ampere+ only; math kernel always on
-            if hasattr(torch.backends, 'cuda'):
-                try:
-                    torch.backends.cuda.enable_flash_sdp(cc_major >= 8)
-                    torch.backends.cuda.enable_mem_efficient_sdp(cc_major >= 8)
-                    torch.backends.cuda.enable_math_sdp(True)
-                except Exception:
-                    pass
             # Matmul / cuDNN flags
             if hasattr(torch.backends, 'cuda') and hasattr(torch.backends.cuda, 'matmul'):
                 try:
@@ -252,6 +244,16 @@ class TTSUtils:
             if hasattr(torch.backends, 'cudnn'):
                 try:
                     torch.backends.cudnn.allow_tf32 = tf32_ok
+                except Exception:
+                    pass
+            # SDP attention — enable globally for scaled_dot_product_attention
+            if hasattr(torch.backends, 'cuda'):
+                try:
+                    # Flash SDP and Memory Efficient SDP are generally safe and fast on Ampere+ (cc >= 8)
+                    # We enable them globally to allow the dispatcher to pick the best kernel.
+                    torch.backends.cuda.enable_flash_sdp(cc_major >= 8)
+                    torch.backends.cuda.enable_mem_efficient_sdp(cc_major >= 8)
+                    torch.backends.cuda.enable_math_sdp(True)
                 except Exception:
                     pass
             # ---------- AMP dtype — derived from compute capability, conservative ----------

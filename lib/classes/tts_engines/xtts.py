@@ -156,7 +156,7 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                             }.items()
                             if self.session.get(key) is not None
                         }
-                        with torch.no_grad():
+                        with torch.inference_mode():
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                 result = self.engine.inference(
                                     text=part,
@@ -168,7 +168,7 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                         audio_part = result.get('wav')
                         if is_audio_data_valid(audio_part):
                             src_tensor = self._tensor_type(audio_part)
-                            part_tensor = src_tensor.clone().detach().unsqueeze(0).cpu()
+                            part_tensor = src_tensor.cpu().unsqueeze(0)
                             if part_tensor is not None and part_tensor.numel() > 0:
                                 if part[-1].isalnum() or part[-1] == '—':
                                     part_tensor = trim_audio(part_tensor.squeeze(), self.params['samplerate'], 0.001, trim_audio_buffer).unsqueeze(0)
@@ -177,7 +177,7 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                                 if not re.search(r'\w$', part, flags=re.UNICODE) and part[-1] != '—':
                                     silence_time = int(np.random.uniform(0.3, 0.6) * 100) / 100
                                     break_tensor = torch.zeros(1, int(self.params['samplerate'] * silence_time))
-                                    self.audio_segments.append(break_tensor.clone())
+                                    self.audio_segments.append(break_tensor)
                             else:
                                 error = f"part_tensor not valid"
                                 return False, error
@@ -188,7 +188,6 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                     segment_tensor = torch.cat(self.audio_segments, dim=-1)
                     torchaudio.save(sentence_file, segment_tensor, self.params['samplerate'])
                     del segment_tensor
-                    self.cleanup_memory()
                     self.audio_segments = []
                     if not os.path.exists(sentence_file):
                         error = f"Cannot create {sentence_file}"

@@ -148,7 +148,7 @@ class VoiceExtractor:
             sources = result[0] if isinstance(result, (tuple, list)) else result
             vocals_idx = model.sources.index("vocals")
             vocals = sources[0, vocals_idx]
-            audio_np = vocals.detach().cpu().numpy()
+            audio_np = vocals.cpu().numpy()
             audio_np = audio_np.T
             audio_np = (audio_np * 32767.0).clip(-32768, 32767).astype("int16")
             audio_segment = AudioSegment(
