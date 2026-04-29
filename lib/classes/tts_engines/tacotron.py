@@ -116,6 +116,10 @@ class Tacotron2(TTSUtils, TTSRegistry, name='tacotron'):
                     if self.session['voice'] == self.params['block_voice']:
                         self.session['voice'] = self.params['current_voice']
                     self.params['block_voice'] = self.params['current_voice']
+                if device != devices['CPU']['proc']:
+                    self.engine.to(device)
+                    if self.engine_zs is not None and self.params['current_voice'] is not None:
+                        self.engine_zs.to(device)
                 proc_dir = os.path.join(self.session['voice_dir'], 'proc')
                 os.makedirs(proc_dir, exist_ok=True)
                 self.audio_segments = []
@@ -139,14 +143,12 @@ class Tacotron2(TTSUtils, TTSRegistry, name='tacotron'):
                             tmp_in_wav = os.path.join(proc_dir, f"{uuid.uuid4()}.wav")
                             tmp_out_wav = os.path.join(proc_dir, f"{uuid.uuid4()}.wav")
                             with torch.inference_mode():
-                                self.engine.to(device)
                                 with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                     self.engine.tts_to_file(
                                         text=part,
                                         file_path=tmp_in_wav
                                     )
-                                self.engine.to(devices['CPU']['proc'])
-                            if self.params['current_voice'] in self.params['semitones'].keys():
+                            if self.params['current_voice'] in self.params['semitones']:
                                 semitones = self.params['semitones'][self.params['current_voice']]
                             else:
                                 current_voice_gender = detect_gender(self.params['current_voice'])
@@ -182,12 +184,10 @@ class Tacotron2(TTSUtils, TTSRegistry, name='tacotron'):
                                 self.params['samplerate'] = TTS_VOICE_CONVERSION[self.tts_zs_key]['samplerate']
                                 source_wav = self._resample_wav(tmp_out_wav, self.params['samplerate'])
                                 target_wav = self._resample_wav(self.params['current_voice'], self.params['samplerate'])
-                                self.engine_zs.to(device)
                                 audio_part = self.engine_zs.voice_conversion(
                                     source_wav=source_wav,
                                     target_wav=target_wav
                                 )
-                                self.engine_zs.to(devices['CPU']['proc'])
                             else:
                                 error = f'Engine {self.tts_zs_key} is None'
                                 return False, error
@@ -199,12 +199,10 @@ class Tacotron2(TTSUtils, TTSRegistry, name='tacotron'):
                                 os.remove(source_wav)
                         else:
                             with torch.inference_mode():
-                                self.engine.to(device)
                                 with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                     audio_part = self.engine.tts(
                                         text=part
                                     )
-                                self.engine.to(devices['CPU']['proc'])
                         if is_audio_data_valid(audio_part):
                             src_tensor = self._tensor_type(audio_part)
                             part_tensor = src_tensor.cpu().unsqueeze(0)

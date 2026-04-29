@@ -204,6 +204,55 @@ class TestPerformanceOptimizations(unittest.TestCase):
             "_check_xtts_builtin_speakers should call _build_xtts_fine_tuned_params()."
         )
 
+    def test_no_engine_cpu_shuffle_in_any_engine(self):
+        """
+        Across ALL 8 engines, self.engine[_zs].to(devices['CPU']['proc']) must not
+        appear anywhere — that pattern is what triggered per-sentence GPU↔CPU
+        shuffling.  The model stays on GPU for the lifetime of a conversion job.
+        """
+        engine_files = [
+            'xtts.py', 'bark.py', 'vits.py', 'yourtts.py',
+            'tacotron.py', 'tortoise.py', 'glowtts.py', 'fairseq.py',
+        ]
+        offenders = []
+        for fname in engine_files:
+            path = os.path.join('lib', 'classes', 'tts_engines', fname)
+            with open(path, 'r', encoding='utf-8') as f:
+                source = f.read()
+            if "self.engine.to(devices['CPU']['proc'])" in source:
+                offenders.append(f'{fname}: self.engine.to(CPU)')
+            if "self.engine_zs.to(devices['CPU']['proc'])" in source:
+                offenders.append(f'{fname}: self.engine_zs.to(CPU)')
+        self.assertEqual(
+            offenders, [],
+            f"Per-sentence GPU↔CPU model shuffle reintroduced: {offenders}"
+        )
+
+    def test_no_keys_membership_in_engine_hot_paths(self):
+        """
+        `x in some_dict.keys()` is O(n) on the keys view; `x in some_dict` is
+        O(1).  In the per-part hot path of every engine, the latter form must
+        be used for the semitones / latent_embedding caches.
+        """
+        engine_files = [
+            'xtts.py', 'vits.py', 'glowtts.py', 'tacotron.py', 'fairseq.py',
+        ]
+        offenders = []
+        for fname in engine_files:
+            path = os.path.join('lib', 'classes', 'tts_engines', fname)
+            with open(path, 'r', encoding='utf-8') as f:
+                source = f.read()
+            for needle in (
+                "self.params['semitones'].keys()",
+                "self.params['latent_embedding'].keys()",
+            ):
+                if needle in source:
+                    offenders.append(f'{fname}: {needle}')
+        self.assertEqual(
+            offenders, [],
+            f"O(n) .keys() membership in engine hot path: {offenders}"
+        )
+
     def test_xtts_engine_to_device_hoisted(self):
         """
         engine.to(device) must NOT appear inside the per-part inference block.
