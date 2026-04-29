@@ -82,8 +82,10 @@ class TestPerformanceOptimizations(unittest.TestCase):
         import numpy as np
         os.makedirs('tmp/perf_tests', exist_ok=True)
         test_file = 'tmp/perf_tests/integrity_test.wav'
-        if os.path.exists(test_file):
-            os.remove(test_file)
+        try:
+            os.unlink(test_file)
+        except FileNotFoundError:
+            pass
 
         sample_rate = 24000
         dummy_audio = torch.randn(1, sample_rate)  # 1 second of noise
@@ -170,16 +172,36 @@ class TestPerformanceOptimizations(unittest.TestCase):
         fine_tuned_params is built from session config and is identical for every
         sentence-part.  Building it inside the per-part loop wastes a dict
         comprehension + 8 dict lookups thousands of times per audiobook.
-        It must be assigned exactly ONCE in xtts.py convert().
+        The dict must come from the shared TTSUtils helper, called exactly once.
         """
         source = self._read_xtts_source()
-        # Count assignments in xtts.py — there's a separate one in
-        # _check_xtts_builtin_speakers (utils.py), not xtts.py.
-        occurrences = source.count('fine_tuned_params = {')
+        self.assertNotIn(
+            'fine_tuned_params = {', source,
+            "fine_tuned_params dict-comp should not appear inline in xtts.py — "
+            "use TTSUtils._build_xtts_fine_tuned_params() instead."
+        )
+        helper_calls = source.count('self._build_xtts_fine_tuned_params()')
         self.assertEqual(
-            occurrences, 1,
-            f"fine_tuned_params must be hoisted out of the per-part loop "
-            f"(found {occurrences} assignments in xtts.py — expected 1)."
+            helper_calls, 1,
+            f"xtts.py should call self._build_xtts_fine_tuned_params() exactly once "
+            f"per convert() (found {helper_calls})."
+        )
+
+    def test_build_xtts_fine_tuned_params_helper_exists(self):
+        """
+        The shared helper on TTSUtils replaces the dict-comp duplicated between
+        xtts.py and _check_xtts_builtin_speakers.
+        """
+        utils_source = self._read_utils_source()
+        self.assertIn(
+            'def _build_xtts_fine_tuned_params(self)', utils_source,
+            "TTSUtils must expose a shared _build_xtts_fine_tuned_params helper."
+        )
+        # _check_xtts_builtin_speakers should also use the helper, not inline a copy.
+        helper_calls = utils_source.count('self._build_xtts_fine_tuned_params()')
+        self.assertGreaterEqual(
+            helper_calls, 1,
+            "_check_xtts_builtin_speakers should call _build_xtts_fine_tuned_params()."
         )
 
     def test_xtts_engine_to_device_hoisted(self):
@@ -262,11 +284,10 @@ class TestPerformanceOptimizations(unittest.TestCase):
     def test_xtts_word_end_pattern_module_level(self):
         """
         The trailing-word regex should be compiled once at module load, not on
-        every sentence-part.  re's internal cache handles this implicitly but
-        the explicit module-level compile is clearer and removes a tiny lookup.
+        every sentence-part.
         """
         source = self._read_xtts_source()
-        self.assertIn("_WORD_END_PATTERN = re.compile(r'\\w$', re.UNICODE)", source,
+        self.assertIn("_WORD_END_PATTERN = re.compile(r'\\w$')", source,
                       "Module-level _WORD_END_PATTERN should be defined in xtts.py")
         self.assertIn('_WORD_END_PATTERN.search(part)', source,
                       "xtts.py should use the module-level _WORD_END_PATTERN")

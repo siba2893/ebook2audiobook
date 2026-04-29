@@ -79,9 +79,6 @@ class Bark(TTSUtils, TTSRegistry, name='bark'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
-                # Hoist the model→device move out of the per-part loop.  The old code
-                # shuffled the entire Bark model GPU↔CPU per sentence-part, costing
-                # several seconds of PCIe transfer per sentence.  Stays on GPU now.
                 if device != devices['CPU']['proc']:
                     self.engine.to(device)
                 sentence_parts = self._split_sentence_on_sml(sentence)

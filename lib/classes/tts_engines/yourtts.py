@@ -73,7 +73,6 @@ class YourTTS(TTSUtils, TTSRegistry, name='yourtts'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
-                # Keep model on GPU across the per-part loop (was shuffled per-sentence).
                 if device != devices['CPU']['proc']:
                     self.engine.to(device)
                 language = self.session['language_iso1'] if self.session['language_iso1'] == 'en' else 'fr-fr' if self.session['language_iso1'] == 'fr' else 'pt-br' if self.session['language_iso1'] == 'pt' else 'en'

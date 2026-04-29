@@ -149,6 +149,22 @@ class TTSUtils:
         gb = total_bytes / (1024 ** 3)
         return round(gb, 2)
 
+    def _build_xtts_fine_tuned_params(self)->dict:
+        return {
+            key.removeprefix('xtts_'): cast_type(self.session[key])
+            for key, cast_type in {
+                'xtts_temperature': float,
+                'xtts_length_penalty': float,
+                'xtts_num_beams': int,
+                'xtts_repetition_penalty': float,
+                'xtts_top_k': int,
+                'xtts_top_p': float,
+                'xtts_speed': float,
+                'xtts_enable_text_splitting': bool,
+            }.items()
+            if self.session.get(key) is not None
+        }
+
     def _load_xtts_builtin_list(self)->dict:
         try:
             import torch
@@ -456,24 +472,7 @@ class TTSUtils:
                             gpt_cond_latent, speaker_embedding = self.xtts_speakers[default_engine_settings[xtts]['voices'][speaker]].values()
                         else:
                             gpt_cond_latent, speaker_embedding = engine.get_conditioning_latents(audio_path=[current_voice], librosa_trim_db=30, load_sr=24000, sound_norm_refs=True)
-                        fine_tuned_params = {
-                            key.removeprefix('xtts_'): cast_type(self.session[key])
-                            for key, cast_type in {
-                                'xtts_temperature': float,
-                                #'xtts_codec_temperature': float,
-                                'xtts_length_penalty': float,
-                                'xtts_num_beams': int,
-                                'xtts_repetition_penalty': float,
-                                #'xtts_cvvp_weight': float,
-                                'xtts_top_k': int,
-                                'xtts_top_p': float,
-                                'xtts_speed': float,
-                                #'xtts_gpt_cond_len': int,
-                                #'xtts_gpt_batch_size': int,
-                                'xtts_enable_text_splitting': bool
-                            }.items()
-                            if self.session.get(key) is not None
-                        }
+                        fine_tuned_params = self._build_xtts_fine_tuned_params()
                         with torch.inference_mode():
                             engine.to(device)
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):

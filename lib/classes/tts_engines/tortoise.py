@@ -83,7 +83,6 @@ class Tortoise(TTSUtils, TTSRegistry, name='tortoise'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
-                # Keep model on GPU across the per-part loop (was shuffled per-sentence).
                 if device != devices['CPU']['proc']:
                     self.engine.to(device)
                 sentence_parts = self._split_sentence_on_sml(sentence)

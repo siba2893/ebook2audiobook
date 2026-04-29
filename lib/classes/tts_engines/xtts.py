@@ -3,10 +3,7 @@ from lib.classes.tts_engines.common.preset_loader import load_engine_presets
 
 #sys.stderr = StdoutFilter(sys.stdout)
 
-# Module-level compile of the trailing-word check used per sentence-part.
-# Python's re cache normally handles this, but pulling it out avoids the cache
-# lookup and removes a runtime SyntaxWarning when the source is byte-compiled.
-_WORD_END_PATTERN = re.compile(r'\w$', re.UNICODE)
+_WORD_END_PATTERN = re.compile(r'\w$')
 
 
 class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
@@ -22,9 +19,7 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
             self.pth_voice_file = None
             self.resampler_cache = {}
             self.audio_segments = []
-            # Cache of silence break tensors keyed on sample-count.  Reused across all
-            # sentences in a conversion job; never mutated, so sharing the underlying
-            # storage is safe (torch.cat does not write back to its inputs).
+            # Shared by reference — torch.cat does not mutate its inputs.
             self._silence_cache = {}
             self.models = load_engine_presets(self.session['tts_engine'])
             self.params = {"latent_embedding":{}}
@@ -118,33 +113,13 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
-                # Move model to target device once per convert() call, not per sentence.
-                # The per-sentence GPU→CPU shuffle (which was the old behaviour) costs
-                # several seconds of PCIe transfer per sentence on any card.  We only skip
-                # this move if the model is already on the right device.
                 if device != devices['CPU']['proc']:
                     self.engine.to(device)
-                # Hoist values that don't change across the per-part loop.
-                # fine_tuned_params is built from session config — same for every part of every sentence
-                # in this convert() call.  Building it once saves a dict comprehension + 8 dict lookups
-                # per sentence-part (~thousands of repetitions for a full audiobook).
-                fine_tuned_params = {
-                    key.removeprefix("xtts_"): cast_type(self.session[key])
-                    for key, cast_type in {
-                        "xtts_temperature": float,
-                        "xtts_length_penalty": float,
-                        "xtts_num_beams": int,
-                        "xtts_repetition_penalty": float,
-                        "xtts_top_k": int,
-                        "xtts_top_p": float,
-                        "xtts_speed": float,
-                        "xtts_enable_text_splitting": bool
-                    }.items()
-                    if self.session.get(key) is not None
-                }
+                fine_tuned_params = self._build_xtts_fine_tuned_params()
                 language_iso1 = self.session['language_iso1']
                 amp_enabled = (self.amp_dtype != torch.float32)
                 samplerate = self.params['samplerate']
+                trim_audio_buffer = 0.006
                 sentence_parts = self._split_sentence_on_sml(sentence)
                 self.params['block_voice'] = kwargs.get('block_voice', self.session['voice'])
                 if self.params.get('inline_voice'):
@@ -169,11 +144,10 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                     if not any(c.isalnum() for c in part):
                         continue
                     else:
-                        trim_audio_buffer = 0.006
                         if part.endswith("'"):
                             part = part[:-1]
                         part = part.replace('.', ' ;\n')
-                        if self.params['current_voice'] is not None and self.params['current_voice'] in self.params['latent_embedding'].keys():
+                        if self.params['current_voice'] is not None and self.params['current_voice'] in self.params['latent_embedding']:
                             self.params['gpt_cond_latent'], self.params['speaker_embedding'] = self.params['latent_embedding'][self.params['current_voice']]
                         else:
                             msg = 'Computing speaker latents…'
