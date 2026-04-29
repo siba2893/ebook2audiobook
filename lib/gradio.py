@@ -25,6 +25,7 @@ def build_interface(args:dict)->gr.Blocks:
         page_size = 15
         visible_gr_tab_xtts_params = interface_component_options['gr_tab_xtts_params']
         visible_gr_tab_bark_params = interface_component_options['gr_tab_bark_params']
+        visible_gr_tab_fishspeech_params = interface_component_options.get('gr_tab_fishspeech_params', True)
         visible_gr_group_voice_file = interface_component_options['gr_group_voice_file']
         visible_gr_group_custom_model = interface_component_options['gr_group_custom_model']
         js_hide_elements = 'document.querySelector("#ebook_textarea_toolbar")?.remove();'
@@ -767,6 +768,52 @@ def build_interface(args:dict)->gr.Blocks:
                                 elem_id='gr_bark_waveform_temp',
                                 info='Higher values lead to more creative, unpredictable outputs. Lower values make it more conservative.'
                             )
+                    with gr.Tab('Fish Speech Settings', elem_id='gr_tab_fishspeech_params', elem_classes='gr-tab', visible=False) as gr_tab_fishspeech_params:
+                        gr.Markdown(
+                            elem_id='gr_markdown_tab_fishspeech_params',
+                            value='''
+                            ### Customize Fish Speech 1.5 Parameters
+                            Adjust the settings below to control sampling behavior and output length.
+                            Fish Speech 1.5 is licensed CC-BY-NC-SA-4.0 (non-commercial use only).
+                            '''
+                        )
+                        with gr.Group(elem_id='gr_group_fishspeech_params', elem_classes=['gr-group']):
+                            gr_fishspeech_temperature = gr.Slider(
+                                label='Temperature',
+                                minimum=0.1,
+                                maximum=1.0,
+                                step=0.05,
+                                value=float(default_engine_settings[TTS_ENGINES['FISHSPEECH']]['temperature']),
+                                elem_id='gr_fishspeech_temperature',
+                                info='Controls randomness in sampling. Higher values produce more varied outputs.'
+                            )
+                            gr_fishspeech_top_p = gr.Slider(
+                                label='Top P',
+                                minimum=0.1,
+                                maximum=1.0,
+                                step=0.05,
+                                value=float(default_engine_settings[TTS_ENGINES['FISHSPEECH']]['top_p']),
+                                elem_id='gr_fishspeech_top_p',
+                                info='Nucleus sampling probability threshold.'
+                            )
+                            gr_fishspeech_repetition_penalty = gr.Slider(
+                                label='Repetition Penalty',
+                                minimum=1.0,
+                                maximum=2.0,
+                                step=0.05,
+                                value=float(default_engine_settings[TTS_ENGINES['FISHSPEECH']]['repetition_penalty']),
+                                elem_id='gr_fishspeech_repetition_penalty',
+                                info='Penalizes repeated tokens. Higher values reduce repetition.'
+                            )
+                            gr_fishspeech_max_new_tokens = gr.Slider(
+                                label='Max New Tokens',
+                                minimum=256,
+                                maximum=4096,
+                                step=256,
+                                value=int(default_engine_settings[TTS_ENGINES['FISHSPEECH']]['max_new_tokens']),
+                                elem_id='gr_fishspeech_max_new_tokens',
+                                info='Maximum number of tokens to generate per chunk.'
+                            )
                 
                 with gr.Group(elem_id='gr_group_progress', elem_classes=['gr-group-sides-padded']):
                     gr_progress_markdown = gr.Markdown(elem_id='gr_progress_markdown', elem_classes=['gr-markdown'], value='Status')
@@ -1135,6 +1182,7 @@ def build_interface(args:dict)->gr.Blocks:
                             visible_main = True
                             visible_xtts = False
                             visible_bark = False
+                            visible_fishspeech = False
                             visible_ebook_src = False
                             visible_ebook_textarea = False
                             enabled_convert_btn = False
@@ -1144,6 +1192,8 @@ def build_interface(args:dict)->gr.Blocks:
                                 visible_xtts = visible_gr_tab_xtts_params
                             elif session['tts_engine'] == TTS_ENGINES['BARK']:
                                 visible_bark = visible_gr_tab_bark_params
+                            elif session['tts_engine'] == TTS_ENGINES['FISHSPEECH']:
+                                visible_fishspeech = visible_gr_tab_fishspeech_params
                             if session['ebook_mode'] == ebook_modes['DIRECTORY']:
                                 visible_ebook_src = True
                                 ebook_data = session['ebook_list']
@@ -1157,6 +1207,7 @@ def build_interface(args:dict)->gr.Blocks:
                             return (
                                 gr.update(value='', visible=False), gr.update(visible=visible_main),
                                 gr.update(visible=visible_xtts), gr.update(visible=visible_bark),
+                                gr.update(visible=visible_fishspeech),
                                 gr.update(interactive=enabled_convert_btn), gr.update(visible=visible_ebook_src, value=ebook_data), gr.update(visible=visible_ebook_textarea, value=ebook_textarea),
                                 gr.update(value=session['device']), gr.update(value=session['audiobook']), update_gr_audiobook_list(session_id),
                                 update_gr_voice_list(session_id), gr.update(value='')
@@ -1164,14 +1215,14 @@ def build_interface(args:dict)->gr.Blocks:
                         elif session['status'] in [status_tags['CONVERTING']]:
                             return (
                                 gr.update(), gr.update(), gr.update(),
-                                gr.update(), gr.update(), gr.update(visible=True, value=session['ebook_list']), gr.update(),
+                                gr.update(), gr.update(), gr.update(), gr.update(visible=True, value=session['ebook_list']), gr.update(),
                                 gr.update(), gr.update(), gr.update(),
                                 gr.update(), gr.update()
                             )
                 except Exception as e:
                     error = f'refresh_interface(): {e}'
                     exception_alert(session_id, error)
-                outputs = tuple([gr.update() for _ in range(12)])
+                outputs = tuple([gr.update() for _ in range(13)])
                 return outputs
 
             def change_gr_audiobook_list(session_id:str, selected:str|None)->dict:
@@ -1718,12 +1769,14 @@ def build_interface(args:dict)->gr.Blocks:
                             session['fine_tuned'] = default_fine_tuned
                             visible_bark = False
                             visible_xtts = False
+                            visible_fishspeech = False
                             if session['tts_engine'] == TTS_ENGINES['XTTSv2']:
                                 visible_custom_model = True if session['fine_tuned'] == 'internal' else False
                                 visible_xtts = visible_gr_tab_xtts_params
                                 return (
                                     gr.update(value=show_rating(session['tts_engine'])), 
                                     gr.update(visible=visible_xtts),
+                                    gr.update(visible=False),
                                     gr.update(visible=False),
                                     gr.update(visible=visible_custom_model),
                                     update_gr_fine_tuned_list(session_id),
@@ -1734,10 +1787,13 @@ def build_interface(args:dict)->gr.Blocks:
                             else:
                                 if session['tts_engine'] == TTS_ENGINES['BARK']:
                                     visible_bark = visible_gr_tab_bark_params
+                                elif session['tts_engine'] == TTS_ENGINES['FISHSPEECH']:
+                                    visible_fishspeech = visible_gr_tab_fishspeech_params
                                 return (
                                     gr.update(value=show_rating(session['tts_engine'])),
                                     gr.update(visible=False),
-                                    gr.update(visible=visible_bark), 
+                                    gr.update(visible=visible_bark),
+                                    gr.update(visible=visible_fishspeech),
                                     gr.update(visible=False),
                                     update_gr_fine_tuned_list(session_id),
                                     gr.update(label=f"*Upload Custom Model not available for {session['tts_engine']}"),
@@ -1747,7 +1803,7 @@ def build_interface(args:dict)->gr.Blocks:
                 except Exception as e:
                     error = f'change_gr_tts_engine_list(): {e}'
                     exception_alert(session_id, error)
-                return tuple(gr.update() for _ in range(8))
+                return tuple(gr.update() for _ in range(9))
 
             def change_gr_fine_tuned_list(session_id:str, selected:str)->dict:
                 try:
@@ -2505,7 +2561,7 @@ def build_interface(args:dict)->gr.Blocks:
                 gr_voice_player_hidden, gr_voice_play, gr_voice_del_btn, gr_custom_model_del_btn
             ]
             outputs_refresh_interface = [
-                gr_modal, gr_group_main, gr_tab_xtts_params, gr_tab_bark_params, gr_convert_btn,
+                gr_modal, gr_group_main, gr_tab_xtts_params, gr_tab_bark_params, gr_tab_fishspeech_params, gr_convert_btn,
                 gr_ebook_src, gr_ebook_textarea, gr_device, gr_audiobook_player, gr_audiobook_list,
                 gr_voice_list, gr_progress
             ]
@@ -2604,7 +2660,7 @@ def build_interface(args:dict)->gr.Blocks:
             gr_tts_engine_list.change(
                 fn=change_gr_tts_engine_list,
                 inputs=[gr_session, gr_tts_engine_list],
-                outputs=[gr_tts_rating, gr_tab_xtts_params, gr_tab_bark_params, gr_group_custom_model, gr_fine_tuned_list, gr_custom_model_file, gr_custom_model_list, gr_custom_model_label],
+                outputs=[gr_tts_rating, gr_tab_xtts_params, gr_tab_bark_params, gr_tab_fishspeech_params, gr_group_custom_model, gr_fine_tuned_list, gr_custom_model_file, gr_custom_model_list, gr_custom_model_label],
                 show_progress_on=[gr_progress]
             ).then(
                 fn=update_gr_voice_list,
@@ -2897,6 +2953,47 @@ def build_interface(args:dict)->gr.Blocks:
             gr_bark_waveform_temp.change(
                 fn=lambda session_id, val: change_param('bark_waveform_temp', session_id, float(val)),
                 inputs=[gr_session, gr_bark_waveform_temp],
+                outputs=None
+            )
+
+            ########### Fish Speech Params
+
+            gr_tab_fishspeech_params.select(
+                fn=None,
+                inputs=None,
+                outputs=None,
+                js='''
+                    ()=>{
+                        if (!window._fishspeech_sliders_initialized) {
+                            const checkExist = setInterval(() => {
+                                const slider = document.querySelector("#gr_fishspeech_temperature input[type=range]");
+                                if(slider){
+                                    clearInterval(checkExist);
+                                    window._fishspeech_sliders_initialized = true;
+                                }
+                            }, 500);
+                        }
+                    }
+                '''
+            )
+            gr_fishspeech_temperature.change(
+                fn=lambda session_id, val: change_param('fishspeech_temperature', session_id, float(val)),
+                inputs=[gr_session, gr_fishspeech_temperature],
+                outputs=None
+            )
+            gr_fishspeech_top_p.change(
+                fn=lambda session_id, val: change_param('fishspeech_top_p', session_id, float(val)),
+                inputs=[gr_session, gr_fishspeech_top_p],
+                outputs=None
+            )
+            gr_fishspeech_repetition_penalty.change(
+                fn=lambda session_id, val: change_param('fishspeech_repetition_penalty', session_id, float(val)),
+                inputs=[gr_session, gr_fishspeech_repetition_penalty],
+                outputs=None
+            )
+            gr_fishspeech_max_new_tokens.change(
+                fn=lambda session_id, val: change_param('fishspeech_max_new_tokens', session_id, int(val)),
+                inputs=[gr_session, gr_fishspeech_max_new_tokens],
                 outputs=None
             )
 

@@ -117,7 +117,8 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
 - 🎛️ **Fine-tuned preset models** trained by the E2A Team<br/>
      <i>(Contact us if you need additional fine-tuned models, or if you'd like to share yours to the official preset list)</i>
 - 🌐 **Modern React/FastAPI Web UI** — full conversion flow, live SSE progress, audiobook library, and session resume ([see below](#modern-web-ui))
-- ⚡ **Significantly faster GPU inference** — all 8 engines optimized for throughput on RTX 30/40-series and equivalent ([see below](#performance-improvements))
+- ⚡ **Significantly faster GPU inference** — all 9 engines optimized for throughput on RTX 30/40-series and equivalent ([see below](#performance-improvements))
+- 🐟 **Fish Speech 1.5** — new high-quality zero-shot voice cloning engine (~88–92% similarity); non-commercial use only ([CC-BY-NC-SA-4.0](https://huggingface.co/fishaudio/fish-speech-1.5))
 
 
 ##  Hardware Requirements
@@ -297,7 +298,7 @@ optional parameters:
                         (Optional) Processor unit type for the conversion.
                             Default is set in ./lib/conf.py if not present. Fall back to CPU if CUDA or MPS is not available.
   --tts_engine {XTTSv2,BARK,VITS,FAIRSEQ,TACOTRON2,YOURTTS,xtts,bark,vits,fairseq,tacotron,yourtts}
-                        (Optional) Preferred TTS engine (available are: ['XTTSv2', 'BARK', 'VITS', 'FAIRSEQ', 'TACOTRON2', 'YOURTTS', 'xtts', 'bark', 'vits', 'fairseq', 'tacotron', 'yourtts'].
+                        (Optional) Preferred TTS engine (available are: ['XTTSv2', 'BARK', 'VITS', 'FAIRSEQ', 'TACOTRON2', 'YOURTTS', 'FISHSPEECH', 'xtts', 'bark', 'vits', 'fairseq', 'tacotron', 'yourtts', 'fishspeech'].
                             Default depends on the selected language. The tts engine should be compatible with the chosen language
   --custom_model CUSTOM_MODEL
                         (Optional) Path to the custom model zip file cntaining mandatory model files.
@@ -506,7 +507,7 @@ npm run build      # production build → dist/
 
 ## Performance Improvements
 
-All 8 TTS engines (`XTTSv2`, `Bark`, `VITS`, `Fairseq`, `Tacotron2`, `Tortoise`, `GlowTTS`, `YourTTS`) received GPU inference optimizations. The changes are cumulative and hardware-adaptive — they activate only when the detected GPU supports them.
+All 9 TTS engines (`XTTSv2`, `Bark`, `VITS`, `Fairseq`, `Tacotron2`, `Tortoise`, `GlowTTS`, `YourTTS`, `Fish Speech 1.5`) received GPU inference optimizations. The changes are cumulative and hardware-adaptive — they activate only when the detected GPU supports them.
 
 ### GPU-Resident Model (all 8 engines)
 

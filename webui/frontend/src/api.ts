@@ -94,6 +94,10 @@ export async function uploadEbook(file: File): Promise<UploadResponse> {
   return json(await fetch(`${API}/api/sessions/upload`, { method: "POST", body: fd }));
 }
 
+export async function createTestRun(): Promise<UploadResponse & { is_test_run: boolean }> {
+  return json(await fetch(`${API}/api/sessions/test-run`, { method: "POST" }));
+}
+
 export async function getSession(id: string): Promise<SessionStatus> {
   return json(await fetch(`${API}/api/sessions/${id}`));
 }
@@ -110,6 +114,10 @@ export interface ConversionSettings {
   output_format: string;
   xtts_speed: number;
   xtts_temperature: number;
+  fishspeech_temperature: number;
+  fishspeech_top_p: number;
+  fishspeech_repetition_penalty: number;
+  fishspeech_max_new_tokens: number;
 }
 
 export async function startConversion(
@@ -242,6 +250,10 @@ export interface PreviewRequest {
   device: string;
   xtts_speed: number;
   xtts_temperature: number;
+  fishspeech_temperature: number;
+  fishspeech_top_p: number;
+  fishspeech_repetition_penalty: number;
+  fishspeech_max_new_tokens: number;
 }
 
 /**

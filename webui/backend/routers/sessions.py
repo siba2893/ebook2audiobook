@@ -285,6 +285,38 @@ async def upload_ebook(file: UploadFile = File(...)):
     return {"session_id": session_id, "filename": os.path.basename(dest)}
 
 
+@router.post("/sessions/test-run", status_code=201)
+async def create_test_run_session():
+    """Create a session pre-loaded with assets/sample.epub for engine comparison."""
+    sample_path = os.path.join(_ROOT, "assets", "sample.epub")
+    if not os.path.isfile(sample_path):
+        raise HTTPException(status_code=404, detail="assets/sample.epub not found — run tools/gen_sample_epub.py first")
+
+    session_id = str(uuid.uuid4())
+    _ctx().set_session(session_id)
+    session = _ctx().get_session(session_id)
+    session["ebook_src"] = sample_path
+    session["is_gui_process"] = False
+    session["filename_noext"] = "sample"
+
+    _event_queues[session_id] = asyncio.Queue(maxsize=500)
+
+    import datetime as _dt
+    _meta_save(session_id, {
+        "session_id": session_id,
+        "ebook_src": sample_path,
+        "filename": "sample.epub",
+        "filename_noext": "sample",
+        "status": None,
+        "blocks_current_json": None,
+        "process_dir": None,
+        "audiobook": None,
+        "created_at": _dt.datetime.now(_dt.timezone.utc).isoformat(),
+    })
+
+    return {"session_id": session_id, "filename": "sample.epub", "is_test_run": True}
+
+
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str):
     return _session_status(session_id)
@@ -370,6 +402,10 @@ class StartRequest(BaseModel):
     output_format: str = "m4b"
     xtts_speed: float = 1.0
     xtts_temperature: float = 0.85
+    fishspeech_temperature: float = 0.8
+    fishspeech_top_p: float = 0.8
+    fishspeech_repetition_penalty: float = 1.1
+    fishspeech_max_new_tokens: int = 1024
 
 
 def _build_args(session_id: str, req: "StartRequest", lang_pt3: str, lang_pt1: str, blocks_preview: bool) -> dict[str, Any]:
@@ -411,6 +447,11 @@ def _build_args(session_id: str, req: "StartRequest", lang_pt3: str, lang_pt1: s
         "xtts_enable_text_splitting": xtts["enable_text_splitting"],
         "bark_text_temp": bark["text_temp"],
         "bark_waveform_temp": bark["waveform_temp"],
+        # Fish Speech
+        "fishspeech_temperature": req.fishspeech_temperature,
+        "fishspeech_top_p": req.fishspeech_top_p,
+        "fishspeech_repetition_penalty": req.fishspeech_repetition_penalty,
+        "fishspeech_max_new_tokens": req.fishspeech_max_new_tokens,
         "ebook_list": None,
         "ebook_textarea": None,
         "custom_model": None,

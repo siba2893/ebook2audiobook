@@ -32,12 +32,12 @@ phonemizer
 indic-nlp-library
 stanza==1.10.1
 argostranslate==1.11.0
-pandas>=1.0,<3.0
-gradio==5.49.1
+pandas>=1.0,<4.0
+gradio>=5.49.1
 pyannote-audio==3.4.0; python_version < '3.12'
 pyannote-audio>=4.0.0; python_version >= '3.12'
 huggingface_hub>=0.36.2,<1.0; python_version < '3.12'
-huggingface_hub>=1.0; python_version >= '3.12'
+huggingface_hub>=0.36.2; python_version >= '3.12'
 torch==2.7.1; python_version < '3.12'
 torch==2.11.0; python_version >= '3.12'
 torchaudio==2.7.1; python_version < '3.12'
@@ -48,3 +48,12 @@ coqui-tts[languages]==0.27.5
 basedpyright
 ext/py/num2words
 ext/py/demucs
+
+# Fish Speech 1.5 — zero-shot voice cloning (CC-BY-NC-SA-4.0, non-commercial only)
+# Not on PyPI. Install via git URL (pip will handle it) or clone + pip install -e .[cu128].
+# Note: torch.compile is disabled on Windows/macOS (Triton not available).
+# Linux system deps required: apt install portaudio19-dev libsox-dev ffmpeg
+git+https://github.com/fishaudio/fish-speech.git@v1.5.1
+ormsgpack
+descript-audio-codec
+einops>=0.7.0

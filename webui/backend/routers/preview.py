@@ -28,6 +28,10 @@ class PreviewRequest(BaseModel):
     device: str = "cuda"
     xtts_speed: float = 1.0
     xtts_temperature: float = 0.85
+    fishspeech_temperature: float = 0.8
+    fishspeech_top_p: float = 0.8
+    fishspeech_repetition_penalty: float = 1.1
+    fishspeech_max_new_tokens: int = 1024
 
 
 @router.post("/preview")
@@ -107,6 +111,11 @@ def _synthesize(req: PreviewRequest, text: str) -> str:
         "xtts_top_k": default_engine_settings[TTS_ENGINES["XTTSv2"]]["top_k"],
         "xtts_top_p": default_engine_settings[TTS_ENGINES["XTTSv2"]]["top_p"],
         "xtts_enable_text_splitting": default_engine_settings[TTS_ENGINES["XTTSv2"]]["enable_text_splitting"],
+        # Fish Speech-specific
+        "fishspeech_temperature": req.fishspeech_temperature,
+        "fishspeech_top_p": req.fishspeech_top_p,
+        "fishspeech_repetition_penalty": req.fishspeech_repetition_penalty,
+        "fishspeech_max_new_tokens": req.fishspeech_max_new_tokens,
     }
 
     # Wrap in a DictProxy-compatible shim so engine code can use [] and .get()

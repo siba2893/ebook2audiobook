@@ -16,6 +16,7 @@ export default function App() {
   const [stage, setStage] = useState<Stage>("upload");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
+  const [isTestRun, setIsTestRun] = useState(false);
   const [resumable, setResumable] = useState<{ id: string; name: string; status: string } | null>(null);
 
   // On first load, check for a resumable session
@@ -71,6 +72,7 @@ export default function App() {
     setStage("upload");
     setSessionId(null);
     setFilename(null);
+    setIsTestRun(false);
     setResumable(null);
     localStorage.removeItem(LS_SESSION);
     localStorage.removeItem(LS_STAGE);
@@ -124,9 +126,10 @@ export default function App() {
 
           {stage === "upload" && (
             <UploadCard
-              onUploaded={(sid, fname) => {
+              onUploaded={(sid, fname, testRun) => {
                 setSessionId(sid);
                 setFilename(fname);
+                setIsTestRun(!!testRun);
                 persistSession(sid, "configure", fname);
                 setStage("configure");
               }}
@@ -136,7 +139,14 @@ export default function App() {
             <ConfigureCard
               sessionId={sessionId}
               filename={filename}
-              onNext={() => advanceTo("chapters")}
+              isTestRun={isTestRun}
+              onNext={() => {
+                if (isTestRun) {
+                  advanceTo("running");
+                } else {
+                  advanceTo("chapters");
+                }
+              }}
             />
           )}
           {stage === "chapters" && sessionId && (

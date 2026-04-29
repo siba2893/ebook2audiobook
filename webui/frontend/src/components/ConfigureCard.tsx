@@ -6,6 +6,7 @@ import VoicePreview from "./VoicePreview";
 interface Props {
   sessionId: string;
   filename: string | null;
+  isTestRun?: boolean;
   onNext: (settings: ConversionSettings) => void;
 }
 
@@ -17,6 +18,10 @@ const DEFAULTS: ConversionSettings = {
   output_format: "m4b",
   xtts_speed: 1.0,
   xtts_temperature: 0.85,
+  fishspeech_temperature: 0.8,
+  fishspeech_top_p: 0.8,
+  fishspeech_repetition_penalty: 1.1,
+  fishspeech_max_new_tokens: 1024,
 };
 
 function loadSettings(): ConversionSettings {
@@ -31,7 +36,7 @@ function saveSettings(s: ConversionSettings) {
   localStorage.setItem("ebook2audiobook:settings", JSON.stringify(s));
 }
 
-export default function ConfigureCard({ sessionId, filename, onNext }: Props) {
+export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }: Props) {
   const [settings, setSettings] = useState<ConversionSettings>(loadSettings());
 
   function set<K extends keyof ConversionSettings>(key: K, value: ConversionSettings[K]) {
@@ -46,12 +51,24 @@ export default function ConfigureCard({ sessionId, filename, onNext }: Props) {
   return (
     <section className="space-y-6">
       <div>
-        <p className="text-xs uppercase tracking-widest text-zinc-500">step 02</p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs uppercase tracking-widest text-zinc-500">step 02</p>
+          {isTestRun && (
+            <span className="text-xs uppercase tracking-widest text-amber-500 border border-amber-700 rounded px-1.5 py-0.5">
+              test run
+            </span>
+          )}
+        </div>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight">Configure Conversion</h2>
         {filename && (
           <p className="mt-1 text-sm text-zinc-400 font-mono">{filename}</p>
         )}
         <p className="mt-1 text-xs text-zinc-600 font-mono">session {sessionId}</p>
+        {isTestRun && (
+          <p className="mt-2 text-xs text-zinc-500">
+            Using the built-in sample — chapters editor will be skipped and conversion starts immediately.
+          </p>
+        )}
       </div>
 
       <VoiceBrowser
@@ -86,6 +103,7 @@ export default function ConfigureCard({ sessionId, filename, onNext }: Props) {
               <option value="bark">Bark</option>
               <option value="vits">VITS</option>
               <option value="yourtts">YourTTS</option>
+              <option value="fishspeech">Fish Speech 1.5</option>
             </select>
           </div>
 
@@ -142,12 +160,65 @@ export default function ConfigureCard({ sessionId, filename, onNext }: Props) {
               </div>
             </>
           )}
+
+          {settings.tts_engine === "fishspeech" && (
+            <>
+              <div>
+                <label className="label">temperature</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={settings.fishspeech_temperature}
+                  onChange={(e) => set("fishspeech_temperature", Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label className="label">top p</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0.1}
+                  max={1.0}
+                  step={0.05}
+                  value={settings.fishspeech_top_p}
+                  onChange={(e) => set("fishspeech_top_p", Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label className="label">repetition penalty</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={1.0}
+                  max={2.0}
+                  step={0.05}
+                  value={settings.fishspeech_repetition_penalty}
+                  onChange={(e) => set("fishspeech_repetition_penalty", Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label className="label">max new tokens</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={256}
+                  max={4096}
+                  step={256}
+                  value={settings.fishspeech_max_new_tokens}
+                  onChange={(e) => set("fishspeech_max_new_tokens", Number(e.target.value))}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       <div className="flex justify-end">
         <button className="btn-primary" onClick={handleNext}>
-          next: review chapters
+          {isTestRun ? "start test run" : "next: review chapters"}
         </button>
       </div>
     </section>

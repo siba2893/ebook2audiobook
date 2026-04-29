@@ -1,8 +1,8 @@
 import { useRef, useState } from "react";
-import { uploadEbook } from "../api";
+import { uploadEbook, createTestRun } from "../api";
 
 interface Props {
-  onUploaded: (sessionId: string, filename: string) => void;
+  onUploaded: (sessionId: string, filename: string, isTestRun?: boolean) => void;
 }
 
 const ACCEPTED = ".epub,.pdf,.txt,.mobi,.azw3,.fb2,.lit,.html,.rtf,.doc";
@@ -19,6 +19,19 @@ export default function UploadCard({ onUploaded }: Props) {
     try {
       const res = await uploadEbook(file);
       onUploaded(res.session_id, res.filename);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleTestRun() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createTestRun();
+      onUploaded(res.session_id, res.filename, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -73,6 +86,28 @@ export default function UploadCard({ onUploaded }: Props) {
           if (f) handleFile(f);
         }}
       />
+
+      <div className="flex items-center gap-3">
+        <div className="flex-1 border-t border-zinc-800" />
+        <span className="text-xs text-zinc-600 uppercase tracking-widest">or</span>
+        <div className="flex-1 border-t border-zinc-800" />
+      </div>
+
+      <div className="surface p-5 flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-zinc-200">Test Run</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Use the built-in sample to compare engines and settings.
+          </p>
+        </div>
+        <button
+          className="btn-primary flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+          disabled={busy}
+          onClick={handleTestRun}
+        >
+          {busy ? "loading…" : "try sample"}
+        </button>
+      </div>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
     </section>

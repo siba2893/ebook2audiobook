@@ -12,7 +12,8 @@ TTS_ENGINES = {
     "FAIRSEQ": "fairseq",
     "GLOWTTS": "glowtts",
     "TACOTRON2": "tacotron",
-    "YOURTTS": "yourtts"
+    "YOURTTS": "yourtts",
+    "FISHSPEECH": "fishspeech"
 }
 
 TTS_VOICE_CONVERSION = {
@@ -215,5 +216,29 @@ default_engine_settings = {
         "voice": None,
         "voices": {"Machinella-5": "female-en-5", "ElectroMale-2": "male-en-2", 'Machinella-4': 'female-pt-4\n', 'ElectroMale-3': 'male-pt-3\n'},
         "rating": {"VRAM": 1, "CPU": 5, "RAM": 1, "Realism": 2}
+    },
+    TTS_ENGINES['FISHSPEECH']: {
+        # Fish Speech 1.5 — zero-shot voice cloning via in-context learning.
+        # Model weights: fishaudio/fish-speech-1.5 (CC-BY-NC-SA-4.0, non-commercial use only).
+        # Codebase: Apache 2.0.
+        "repo": "fishaudio/fish-speech-1.5",
+        "languages": {
+            "ara": "ar", "ces": "cs", "deu": "de", "eng": "en", "fra": "fr",
+            "hin": "hi", "hun": "hu", "ita": "it", "jpn": "ja", "kor": "ko",
+            "nld": "nl", "pol": "pl", "por": "pt", "rus": "ru", "spa": "es",
+            "tur": "tr", "zho": "zh", "ukr": "uk", "vie": "vi", "ind": "id"
+        },
+        "samplerate": 24000,
+        "temperature": 0.8,
+        "top_p": 0.8,
+        "repetition_penalty": 1.1,
+        "max_new_tokens": 1024,
+        # Two files downloaded from HuggingFace:
+        #   [0] LLAMA text-to-semantic model
+        #   [1] FireFly VQ-GAN decoder (semantic → audio)
+        "files": ["model.pth", "firefly-gan-vq-fsq-8x1024-21hz-generator.pth"],
+        "voice": default_speaker,
+        "voices": {},
+        "rating": {"VRAM": 4, "CPU": 2, "RAM": 4, "Realism": 5}
     }
 }
