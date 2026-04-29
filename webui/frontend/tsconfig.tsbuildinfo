@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/api.ts","./src/main.tsx","./src/components/chapterseditor.tsx","./src/components/configurecard.tsx","./src/components/conversionprogress.tsx","./src/components/library.tsx","./src/components/uploadcard.tsx","./src/components/voicebrowser.tsx","./src/components/voicepreview.tsx"],"version":"5.9.3"}

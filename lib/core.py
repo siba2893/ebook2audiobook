@@ -1030,7 +1030,9 @@ INTO A NEW TRAINING MODEL. YOU CAN IMPROVE IT OR ASK TO A TRAINING MODEL EXPERT.
             with zipfile.ZipFile(session['epub_path'], 'r') as zf:
                 zip_names = set(zf.namelist())
                 zip_basenames = {os.path.basename(n): n for n in zip_names}
+                total_docs = len(all_docs)
                 for doc_idx, doc in enumerate(all_docs):
+                    show_alert(session_id, {"type": "info", "msg": f"Parsing chapter {doc_idx + 1} / {total_docs}"})
                     text = filter_blocks(session_id, doc_idx, doc, stanza_nlp, is_num2words_compat, zf, zip_names, zip_basenames)
                     if text is None:
                         error = f'Error extracting content from document #{doc_idx + 1}; aborting conversion to avoid partial output.'
@@ -2587,7 +2589,7 @@ def combine_audio_chapters(session_id:str)->list[str]|None:
                 print(error)
                 return None
             block_id = block['id']
-            fname = f'{block_id}.{default_audio_proc_format}'
+            fname = f'{x}.{default_audio_proc_format}'
             fpath = os.path.join(session['chapters_dir'], fname)
             if not os.path.exists(fpath):
                 error = f'Missing chapter audio for block {x} (id {block_id}): {fpath}'

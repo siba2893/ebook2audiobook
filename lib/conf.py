@@ -43,14 +43,31 @@ requirements_file = os.path.abspath(os.path.join('.','requirements.txt'))
 # ---------------------------------------------------------------------
 # Hardware mappings
 # ---------------------------------------------------------------------
-devices = {
-    "CPU": {"proc": "cpu", "found": True},
-    "CUDA": {"proc": "cuda", "found": False},
-    "MPS": {"proc": "mps", "found": False},
-    "ROCM": {"proc": "rocm", "found": False},
-    "XPU": {"proc": "xpu", "found": False},
-    "JETSON": {"proc": "jetson", "found": False},
-}
+def _detect_devices() -> dict:
+    cuda_found = False
+    mps_found = False
+    rocm_found = False
+    xpu_found = False
+    jetson_found = False
+    try:
+        import torch
+        cuda_found = torch.cuda.is_available()
+        mps_found = hasattr(torch.backends, 'mps') and torch.backends.mps.is_available()
+        rocm_found = hasattr(torch, 'hip') and torch.hip.is_available()
+        xpu_found = hasattr(torch, 'xpu') and torch.xpu.is_available()
+        jetson_found = cuda_found and os.path.exists('/etc/nv_tegra_release')
+    except Exception:
+        pass
+    return {
+        "CPU":    {"proc": "cpu",    "found": True},
+        "CUDA":   {"proc": "cuda",   "found": cuda_found},
+        "MPS":    {"proc": "mps",    "found": mps_found},
+        "ROCM":   {"proc": "rocm",   "found": rocm_found},
+        "XPU":    {"proc": "xpu",    "found": xpu_found},
+        "JETSON": {"proc": "jetson", "found": jetson_found},
+    }
+
+devices = _detect_devices()
 
 default_device = devices['CPU']['proc']
 

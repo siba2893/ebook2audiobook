@@ -263,8 +263,12 @@ class TTSUtils:
                 amp_dtype = torch.float16
             elif cc_major >= 8:
                 # Ampere+ (RTX 30xx/40xx, A/H/L) — full tensor cores, BF16 available
+                # NOTE: Windows TorchAudio does not support BFloat16 for audio ops,
+                # so we force FP16 on Windows regardless of hardware capability.
+                import platform as _platform
+                _on_windows = _platform.system() == 'Windows'
                 use_bf16 = False
-                if quality_mode:
+                if quality_mode and not _on_windows:
                     try:
                         use_bf16 = bool(
                             hasattr(torch.cuda, 'is_bf16_supported')
@@ -466,9 +470,9 @@ class TTSUtils:
                                 # Rebuild the path under the new language folder.
                                 # Works for any old-language → any new-language swap (eng→fra, zho→fra, …),
                                 # not just eng→X. xtts voices are always absolute paths under voices_dir.
-                                voices_root = Path(voices_dir)
+                                voices_root = Path(voices_dir).resolve()
                                 try:
-                                    rel = Path(current_voice).relative_to(voices_root)
+                                    rel = Path(current_voice).resolve().relative_to(voices_root)
                                 except ValueError:
                                     error = f'_check_xtts_builtin_speakers() error: {current_voice} is not under {voices_dir}'
                                     print(error)
