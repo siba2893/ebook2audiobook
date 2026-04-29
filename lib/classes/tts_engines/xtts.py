@@ -3,6 +3,12 @@ from lib.classes.tts_engines.common.preset_loader import load_engine_presets
 
 #sys.stderr = StdoutFilter(sys.stdout)
 
+# Module-level compile of the trailing-word check used per sentence-part.
+# Python's re cache normally handles this, but pulling it out avoids the cache
+# lookup and removes a runtime SyntaxWarning when the source is byte-compiled.
+_WORD_END_PATTERN = re.compile(r'\w$', re.UNICODE)
+
+
 class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
 
     def __init__(self, session:DictProxy):
@@ -16,6 +22,10 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
             self.pth_voice_file = None
             self.resampler_cache = {}
             self.audio_segments = []
+            # Cache of silence break tensors keyed on sample-count.  Reused across all
+            # sentences in a conversion job; never mutated, so sharing the underlying
+            # storage is safe (torch.cat does not write back to its inputs).
+            self._silence_cache = {}
             self.models = load_engine_presets(self.session['tts_engine'])
             self.params = {"latent_embedding":{}}
             fine_tuned = self.session.get('fine_tuned')
@@ -191,9 +201,13 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                                     part_tensor = trim_audio(part_tensor.squeeze(), samplerate, 0.001, trim_audio_buffer).unsqueeze(0)
                                 self.audio_segments.append(part_tensor)
                                 del part_tensor
-                                if not re.search(r'\w$', part, flags=re.UNICODE) and part[-1] != '—':
+                                if not _WORD_END_PATTERN.search(part) and part[-1] != '—':
                                     silence_time = int(np.random.uniform(0.3, 0.6) * 100) / 100
-                                    break_tensor = torch.zeros(1, int(samplerate * silence_time))
+                                    silence_samples = int(samplerate * silence_time)
+                                    break_tensor = self._silence_cache.get(silence_samples)
+                                    if break_tensor is None:
+                                        break_tensor = torch.zeros(1, silence_samples)
+                                        self._silence_cache[silence_samples] = break_tensor
                                     self.audio_segments.append(break_tensor)
                             else:
                                 error = f"part_tensor not valid"

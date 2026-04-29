@@ -247,6 +247,30 @@ class TestPerformanceOptimizations(unittest.TestCase):
             "Missing '[' not in sentence fast-path in _split_sentence_on_sml."
         )
 
+    def test_xtts_silence_cache_present(self):
+        """
+        Per-sentence allocation of the silence break tensor was ~10-30 KB.  For a
+        10000-sentence book that's ~300 MB of churn for tensors that take ~30
+        unique values.  Verify the cache exists in the source.
+        """
+        source = self._read_xtts_source()
+        self.assertIn('self._silence_cache', source,
+                      "_silence_cache attribute should exist on XTTSv2")
+        self.assertIn('self._silence_cache.get(silence_samples)', source,
+                      "Per-sentence break tensor should be looked up in _silence_cache")
+
+    def test_xtts_word_end_pattern_module_level(self):
+        """
+        The trailing-word regex should be compiled once at module load, not on
+        every sentence-part.  re's internal cache handles this implicitly but
+        the explicit module-level compile is clearer and removes a tiny lookup.
+        """
+        source = self._read_xtts_source()
+        self.assertIn("_WORD_END_PATTERN = re.compile(r'\\w$', re.UNICODE)", source,
+                      "Module-level _WORD_END_PATTERN should be defined in xtts.py")
+        self.assertIn('_WORD_END_PATTERN.search(part)', source,
+                      "xtts.py should use the module-level _WORD_END_PATTERN")
+
     def test_split_sentence_on_sml_behaviour(self):
         """
         Functional check that the fast-path returns the original sentence
