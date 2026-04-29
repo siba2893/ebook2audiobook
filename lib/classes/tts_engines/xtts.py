@@ -77,6 +77,20 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                     error = f'load_engine(): HuggingFace checkpoint loading failed: {e}'
                     raise RuntimeError(error) from e
             if engine:
+                try:
+                    import deepspeed
+                    engine = deepspeed.init_inference(
+                        engine,
+                        mp_size=1,
+                        dtype=self.amp_dtype,
+                        replace_with_kernel_inject=False
+                    )
+                    print("DeepSpeed inference initialized for XTTSv2")
+                except ImportError:
+                    pass
+                except Exception as e:
+                    print(f"DeepSpeed initialization failed: {e}")
+
                 msg = f'TTS {self.tts_key} Loaded!'
                 print(msg)
                 return engine
@@ -189,9 +203,6 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                     torchaudio.save(sentence_file, segment_tensor, self.params['samplerate'])
                     del segment_tensor
                     self.audio_segments = []
-                    if not os.path.exists(sentence_file):
-                        error = f"Cannot create {sentence_file}"
-                        return False, error
                 return True, None
             else:
                 error = f"TTS engine {self.session['tts_engine']} failed to load!"

@@ -154,9 +154,6 @@ class Tortoise(TTSUtils, TTSRegistry, name='tortoise'):
                     torchaudio.save(sentence_file, segment_tensor, self.params['samplerate'])
                     del segment_tensor
                     self.audio_segments = []
-                    if not os.path.exists(sentence_file):
-                        error = f"Cannot create {sentence_file}"
-                        return False, error
                 return True, None
             else:
                 error = f"TTS engine {self.session['tts_engine']} failed to load!"

@@ -49,6 +49,22 @@ class Bark(TTSUtils, TTSRegistry, name='bark'):
             #    raise NotImplementedError(error)
             engine = self._load_api(self.tts_key, self.model_path)
         if engine:
+            try:
+                import deepspeed
+                # Bark uses multiple sub-models; we apply DS to the synthesizer's models if accessible
+                # This is a safe fallback attempt
+                engine.synthesizer.tts_model = deepspeed.init_inference(
+                    engine.synthesizer.tts_model,
+                    mp_size=1,
+                    dtype=self.amp_dtype,
+                    replace_with_kernel_inject=False
+                )
+                print("DeepSpeed inference initialized for Bark")
+            except (ImportError, AttributeError):
+                pass
+            except Exception as e:
+                print(f"DeepSpeed initialization failed for Bark: {e}")
+
             msg = f'TTS {self.tts_key} Loaded!'
             print(msg)
             return engine
@@ -160,9 +176,6 @@ class Bark(TTSUtils, TTSRegistry, name='bark'):
                     del segment_tensor
                     self.cleanup_memory()
                     self.audio_segments = []
-                    if not os.path.exists(sentence_file):
-                        error = f"Cannot create {sentence_file}"
-                        return False, error
                 return True, None
             else:
                 error = f"TTS engine {self.session['tts_engine']} failed to load!"
