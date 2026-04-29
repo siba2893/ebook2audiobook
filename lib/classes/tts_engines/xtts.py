@@ -90,6 +90,12 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
+                # Move model to target device once per convert() call, not per sentence.
+                # The per-sentence GPU→CPU shuffle (which was the old behaviour) costs
+                # several seconds of PCIe transfer per sentence on any card.  We only skip
+                # this move if the model is already on the right device.
+                if device != devices['CPU']['proc']:
+                    self.engine.to(device)
                 sentence_parts = self._split_sentence_on_sml(sentence)
                 self.params['block_voice'] = kwargs.get('block_voice', self.session['voice'])
                 if self.params.get('inline_voice'):
@@ -147,7 +153,6 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                             if self.session.get(key) is not None
                         }
                         with torch.no_grad():
-                            self.engine.to(device)
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                 result = self.engine.inference(
                                     text=part,
@@ -156,7 +161,6 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                                     speaker_embedding=self.params['speaker_embedding'],
                                     **fine_tuned_params
                                 )
-                            self.engine.to(devices['CPU']['proc'])
                         audio_part = result.get('wav')
                         if is_audio_data_valid(audio_part):
                             src_tensor = self._tensor_type(audio_part)

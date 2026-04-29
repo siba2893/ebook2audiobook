@@ -368,6 +368,25 @@ class TTSUtils:
                     vram_dict = VRAMDetector().detect_vram(self.session['device'], self.session['script_mode'])
                     self.session['free_vram_gb'] = vram_dict.get('free_vram_gb', 0)
                     models_loaded_size_gb = self._loaded_tts_size_gb(loaded_tts)
+                    # torch.compile() — only when:
+                    #   • PyTorch >= 2.0 (compile attr present)
+                    #   • running on a GPU (compile on CPU is slower, not faster)
+                    #   • not already compiled (avoid double-wrapping on cache hit)
+                    using_gpu = self.session.get('device', 'cpu') != devices['CPU']['proc']
+                    if (
+                        using_gpu
+                        and hasattr(torch, 'compile')
+                        and not getattr(engine, '_omo_compiled', False)
+                    ):
+                        try:
+                            # fullgraph=False: XTTS has dynamic control flow that can't be
+                            # fully traced; mode='reduce-overhead' lowers kernel-launch cost
+                            # without requiring a full static graph.
+                            engine = torch.compile(engine, fullgraph=False, mode='reduce-overhead')
+                            engine._omo_compiled = True
+                            print('[torch.compile] XTTS engine compiled with reduce-overhead mode.')
+                        except Exception as _compile_err:
+                            print(f'[torch.compile] skipped: {_compile_err}')
                     if self.session['free_vram_gb'] > models_loaded_size_gb:
                         loaded_tts[key] = engine
                 return engine
@@ -459,7 +478,10 @@ class TTSUtils:
                                     speaker_embedding=speaker_embedding,
                                     **fine_tuned_params,
                                 )
-                            engine.to(devices['CPU']['proc'])
+                            # Do NOT offload back to CPU here — the model stays on GPU
+                            # for the remainder of the session.  CPU offload per-call
+                            # costs several seconds of PCIe transfer with no benefit on
+                            # cards that have enough VRAM to hold the model.
                         audio_sentence = result.get('wav')
                         if is_audio_data_valid(audio_sentence):
                             sourceTensor = self._tensor_type(audio_sentence)
