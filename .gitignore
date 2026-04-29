@@ -19,3 +19,17 @@ models/*
 !audiobooks/cli/.gitkeep
 !audiobooks/gui/gradio/.gitkeep
 !audiobooks/gui/host/.gitkeep
+
+# Local environment / machine-specific
+.installed
+Hardware
+Miniforge3-Windows-x86_64.exe
+*.exe
+.omc/
+
+# Personal voice samples
+voices/uploaded/*.wav
+voices/uploaded/*.mp3
+voices/uploaded/*.flac
+voices/spa/*.wav
+voices/spa/*.tsv

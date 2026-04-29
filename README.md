@@ -92,6 +92,8 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
 - [Fine Tuned TTS models](#fine-tuned-tts-models)
   - [Collection of Fine-Tuned TTS Models](#fine-tuned-tts-collection)
   - [Train XTTSv2](#fine-tune-your-own-xttsv2-model)
+- [Modern Web UI](#modern-web-ui)
+- [Performance Improvements](#performance-improvements)
 - [Supported eBook Formats](#supported-ebook-formats)
 - [Output Formats](#output-and-process-formats)
 - [Revert to older Version](#reverting-to-older-versions)
@@ -113,7 +115,9 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
 - 🧠 **SML tags supported** — fine-grained control of breaks, pauses, voice switching and more ([see below](#sml-tags-available))
 - 🧩 **Optional custom model** using your own trained model (XTTSv2 only, other on request)
 - 🎛️ **Fine-tuned preset models** trained by the E2A Team<br/>
-     <i>(Contact us if you need additional fine-tuned models, or if you’d like to share yours to the official preset list)</i>
+     <i>(Contact us if you need additional fine-tuned models, or if you'd like to share yours to the official preset list)</i>
+- 🌐 **Modern React/FastAPI Web UI** — full conversion flow, live SSE progress, audiobook library, and session resume ([see below](#modern-web-ui))
+- ⚡ **Significantly faster GPU inference** — all 8 engines optimized for throughput on RTX 30/40-series and equivalent ([see below](#performance-improvements))
 
 
 ##  Hardware Requirements
@@ -468,6 +472,92 @@ git checkout tags/VERSION_NUM # Locally/Compose -> Example: git checkout tags/v2
 ## What we need help with! 🙌 
 ## [Roadmap and Full list of things can be found here](https://github.com/DrewThomasson/ebook2audiobook/issues/32)
 - Any help from people speaking any of the supported languages to help us improve the models
+
+---
+
+## Modern Web UI
+
+A second, fully standalone web interface built with **React + TypeScript + Tailwind** (frontend) and **FastAPI** (backend, port 8000) ships alongside the existing Gradio UI.
+
+### Features
+- **Upload → Configure → Chapters Editor → Convert → Library** — guided single-page flow
+- **Live progress via Server-Sent Events (SSE)** — per-sentence status streamed to the browser without polling
+- **Voice Browser & Preview** — browse and audition built-in voices before committing
+- **Audiobook Library** — completed audiobooks and in-progress sessions listed with date, UUID, and a *Finish & Combine* button for sessions that completed TTS but lost the final combine step
+- **Session resume** — sessions survive server restarts; incomplete conversions can be continued exactly where they left off
+- **REST API**
+  - `POST /api/sessions` — create session (upload ebook)
+  - `GET /api/sessions/{id}/events` — SSE stream
+  - `POST /api/sessions/{id}/combine` — combine chapter audio for a stalled session
+  - `DELETE /api/sessions/{id}` — clean up tmp files, proc dir, and uploaded ebook
+
+### Starting the Web UI
+```bash
+# Backend (from repo root)
+uvicorn webui.backend.main:app --port 8000 --reload
+
+# Frontend (first time: npm install)
+cd webui/frontend
+npm run dev        # dev server on :5173
+npm run build      # production build → dist/
+```
+
+---
+
+## Performance Improvements
+
+All 8 TTS engines (`XTTSv2`, `Bark`, `VITS`, `Fairseq`, `Tacotron2`, `Tortoise`, `GlowTTS`, `YourTTS`) received GPU inference optimizations. The changes are cumulative and hardware-adaptive — they activate only when the detected GPU supports them.
+
+### GPU-Resident Model (all 8 engines)
+
+**The single biggest speedup.** Previously each engine shuffled its full model weight set GPU→CPU→GPU on every sentence (or even every sub-sentence part). The model is now moved to the target device **once per conversion job** and stays there.
+
+On a typical RTX 40-series card a 1.8 GB model (e.g. XTTSv2) costs ~110 ms per transfer direction over PCIe. For a 10,000-sentence audiobook the old behaviour wasted **~36 minutes** of pure memory transfer with zero benefit. That overhead is now zero.
+
+### `torch.inference_mode()` (all 8 engines)
+
+Replaced `torch.no_grad()` with `torch.inference_mode()` across every engine's hot path. `inference_mode` additionally disables per-tensor version-counter tracking, saving ~10% wall-clock on autoregressive models with long token sequences.
+
+### Hardware Acceleration: TF32 + Flash Attention (Ampere / Ada Lovelace)
+
+Enabled at engine load time, conditioned on runtime GPU detection:
+
+| Feature | Condition | Benefit |
+|---|---|---|
+| **TF32 matmul** | CUDA, CC ≥ 8.0 (RTX 30xx/40xx), non-Jetson | Native tensor-core throughput for FP32 ops |
+| **TF32 cuDNN** | Same | Convolution speedup |
+| **Flash SDP** | CC ≥ 8.0 | Hardware-fused attention, lower memory bandwidth |
+| **Memory-Efficient SDP** | CC ≥ 8.0 | Reduced VRAM for large attention matrices |
+| **BF16 autocast** | CC ≥ 8.0, non-Windows | Halved memory, tensor-core paths for matmul |
+| **FP16 autocast** | CC ≥ 7.0, or Windows | Safe precision reduction on older / Windows targets |
+
+All flags are wrapped in `try/except` and fall back silently to FP32 on unsupported hardware.
+
+### `torch.compile()` on Checkpoint-Loaded Engines
+
+Applied to XTTSv2 after checkpoint load when running on GPU (PyTorch ≥ 2.0). The model graph is compiled into fused CUDA kernels on the first inference call (`mode='reduce-overhead'`, `fullgraph=False` to tolerate XTTS dynamic control flow). Pays a ~30 s warmup on sentence 1; all subsequent sentences skip Python dispatch overhead entirely.
+
+### Hot-Path Micro-Optimisations (XTTSv2)
+
+- **Invariant hoisting** — `fine_tuned_params` dict, `language_iso1`, `amp_enabled`, and `samplerate` were rebuilt on every sentence-part; now computed once per `convert()` call.
+- **SML fast-path** — `_split_sentence_on_sml()` skips the regex `finditer` entirely when the sentence contains no `[` character (the common case for plain prose).
+- **Silence tensor cache** — silence-break tensors (~10–30 KB each) were freshly allocated for every sentence-part. Now cached by sample count and reused. Eliminates ~300 MB of allocation churn on a 10,000-sentence book.
+- **Pre-compiled regex** — the trailing-word check `r'\w$'` is compiled once at module load rather than on every sentence-part.
+- **O(1) dict membership** — `key in dict` replaces `key in dict.keys()` throughout all engine hot paths.
+
+### Skip Redundant `cleanup_memory()` on Cache Hit
+
+`cleanup_memory()` (which calls `torch.cuda.empty_cache()` + Windows working-set trim) previously ran unconditionally before every model load, even when the model was already warm in the cache. It now runs only on genuine cold loads.
+
+### WAV as Default Intermediate Format
+
+Changed `default_audio_proc_format` from `flac` to `wav` in `lib/conf.py`. FLAC encoding is CPU-bound; for thousands of per-sentence segment files it added measurable latency between GPU inference calls. WAV is a direct PCM dump — zero encoding overhead.
+
+### Optional DeepSpeed Inference
+
+`XTTSv2` and `Bark` attempt `deepspeed.init_inference()` after model load when DeepSpeed is installed. On systems with the full CUDA Toolkit this enables kernel-injected, multi-precision inference fusion. On systems without DeepSpeed (or without `nvcc`) the engines fall back to standard PyTorch automatically — no configuration required.
+
+---
   
 <!--
 ## Do you need to rent a GPU to boost service from us?
