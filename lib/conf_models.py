@@ -270,7 +270,7 @@ default_engine_settings = {
         # Model weights: Apache 2.0 (commercial use allowed).
         # Codebase: Apache 2.0.  https://github.com/QwenLM/Qwen3-TTS
         # Install: pip install transformers>=4.51.0 soundfile
-        "repo": "Qwen/Qwen3-TTS",
+        "repo": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
         "languages": {
             "ara": "ar", "deu": "de", "eng": "en", "fra": "fr",
             "ita": "it", "jpn": "ja", "kor": "ko", "por": "pt",

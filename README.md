@@ -93,6 +93,10 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
   - [Collection of Fine-Tuned TTS Models](#fine-tuned-tts-collection)
   - [Train XTTSv2](#fine-tune-your-own-xttsv2-model)
 - [Modern Web UI](#modern-web-ui)
+- [Additional Engines](#additional-engines)
+  - [Fish Speech 1.5](#fish-speech-15)
+  - [CosyVoice 3](#cosyvoice-3)
+  - [Qwen3-TTS](#qwen3-tts)
 - [Performance Improvements](#performance-improvements)
 - [Supported eBook Formats](#supported-ebook-formats)
 - [Output Formats](#output-and-process-formats)
@@ -103,7 +107,7 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
 
 
 ## Features
-- 🔧 **TTS Engines supported**: `XTTSv2`, `Bark`, `Fairseq`, `VITS`, `Tacotron2`, `Tortoise`, `GlowTTS`, `YourTTS`, `Fish Speech 1.5`, `CosyVoice 3`
+- 🔧 **TTS Engines supported**: `XTTSv2`, `Bark`, `Fairseq`, `VITS`, `Tacotron2`, `Tortoise`, `GlowTTS`, `YourTTS`, `Fish Speech 1.5`, `CosyVoice 3`, `Qwen3-TTS`
 - 📚 **Convert multiple file formats**: `.epub`, `.mobi`, `.azw3`, `.fb2`, `.lrf`, `.rb`, `.snb`, `.tcr`, `.pdf`, `.txt`, `.rtf`, `.doc`, `.docx`, `.html`, `.odt`, `.azw`, `.tiff`, `.tif`, `.png`, `.jpg`, `.jpeg`, `.bmp`
 - 💻 **TextArea** to convert directly a short text in audio
 - 🔍 **OCR scanning** for files with text pages as images
@@ -120,6 +124,7 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
 - ⚡ **Significantly faster GPU inference** — all 9 engines optimized for throughput on RTX 30/40-series and equivalent ([see below](#performance-improvements))
 - 🐟 **Fish Speech 1.5** — new high-quality zero-shot voice cloning engine (~88–92% similarity); non-commercial use only ([CC-BY-NC-SA-4.0](https://huggingface.co/fishaudio/fish-speech-1.5))
 - 🎤 **CosyVoice 3** — zero-shot voice cloning with cross-lingual and instruct mode (dialect/emotion/speed control); Apache 2.0, commercial use allowed ([FunAudioLLM/CosyVoice](https://github.com/FunAudioLLM/CosyVoice))
+- 🤖 **Qwen3-TTS** — zero-shot voice cloning via Alibaba's Qwen3 transformer TTS; Apache 2.0, commercial use allowed ([QwenLM/Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS))
 
 
 ##  Hardware Requirements
@@ -503,6 +508,68 @@ cd webui/frontend
 npm run dev        # dev server on :5173
 npm run build      # production build → dist/
 ```
+
+---
+
+## Additional Engines
+
+The three optional high-quality engines — **Fish Speech 1.5**, **CosyVoice 3**, and **Qwen3-TTS** — are not included in the default install because they carry large dependencies or require a separate package ecosystem. Each must be installed once; after that the Web UI will expose it automatically.
+
+### Fish Speech 1.5
+
+Zero-shot voice cloning (~88–92% similarity). **Non-commercial use only** ([CC-BY-NC-SA-4.0](https://huggingface.co/fishaudio/fish-speech-1.5)).
+
+```bash
+# Linux / macOS
+pip install fish-speech
+
+# Windows (CUDA)
+pip install fish-speech
+```
+
+Then start the app normally — the `Fish Speech 1.5` option will appear in the engine dropdown.
+
+---
+
+### CosyVoice 3
+
+Zero-shot voice cloning with cross-lingual and instruct mode. **Apache 2.0, commercial use allowed.**
+
+```bash
+# Clone the third-party submodule (one-time)
+git clone --recursive https://github.com/FunAudioLLM/CosyVoice third_party/CosyVoice
+pip install -r third_party/CosyVoice/requirements.txt
+```
+
+Activate in the Web UI: write `cosyvoice` to `.engine-mode` in the repo root, or select it from the engine dropdown (shown only when the mode file is present).
+
+> **Note**: CosyVoice has a known upstream incompatibility with recent versions of certain dependencies. See [upstream issue #1422](https://github.com/FunAudioLLM/CosyVoice/issues/1422) for status.
+
+---
+
+### Qwen3-TTS
+
+Zero-shot voice cloning via Alibaba's Qwen3 transformer TTS. **Apache 2.0, commercial use allowed.**
+
+**Requirements**: ~6 GB VRAM (bfloat16), CUDA 11.8+. Model weights download automatically on first run (~3 GB from HuggingFace).
+
+```bash
+pip install -U qwen-tts
+```
+
+Activate in the Web UI by writing `qwen3tts` to `.engine-mode` in the repo root:
+
+```bash
+# Linux / macOS
+echo "qwen3tts" > .engine-mode
+
+# Windows (PowerShell)
+"qwen3tts" | Out-File -Encoding ascii .engine-mode
+```
+
+The `Qwen3-TTS` option will appear in the engine dropdown. Select a reference voice (`.wav`) in the Voice field — Qwen3-TTS clones the speaker style from that file without requiring a transcript.
+
+**Supported languages**: Arabic, German, English, French, Italian, Japanese, Korean, Portuguese, Russian, Spanish, Chinese.
 
 ---
 
