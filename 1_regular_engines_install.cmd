@@ -2,14 +2,17 @@
 REM ===========================================================================
 REM 1_regular_engines_install.cmd
 REM
-REM Wipes python_env/ pip packages and installs the "regular" 9-engine
-REM profile: XTTSv2, Bark, Tortoise, VITS, Fairseq, GlowTTS, Tacotron2,
-REM YourTTS, Fish Speech 1.5.  CosyVoice 3 is NOT supported in this profile
-REM (its required torch version conflicts with the rest).
+REM Installs the "regular" 9-engine profile on top of the base install:
+REM   XTTSv2, Bark, Tortoise, VITS, Fairseq, GlowTTS, Tacotron2, YourTTS,
+REM   Fish Speech 1.5.  CosyVoice 3 / Qwen3-TTS are NOT supported in this
+REM   profile (their required torch versions / package sets conflict).
+REM
+REM Prerequisite: run base_installation.cmd first.  This script only
+REM uninstalls the cross-profile / engine-specific packages and replaces
+REM them with the regular profile's set, so it's safe to run when switching
+REM from CosyVoice or Qwen3-TTS.
 REM
 REM After this script, the WebUI engine dropdown shows the 9 regular engines.
-REM To switch to CosyVoice-only, run 2_cosy_voice_engine_install.cmd.
-REM To switch to Qwen3-TTS-only, run 3_qwen3tts_engine_install.cmd.
 REM ===========================================================================
 setlocal
 cd /d %~dp0
@@ -17,40 +20,41 @@ cd /d %~dp0
 set PY=%~dp0python_env\python.exe
 if not exist "%PY%" (
     echo [ERROR] python_env\python.exe not found at %PY%
-    echo         Bootstrap python_env first ^(conda or installer^).
     exit /b 1
 )
 
-if not exist tmp\nul mkdir tmp
-
-echo === [1/5] Snapshotting current packages and uninstalling ===
-"%PY%" -m pip freeze > tmp\pip_freeze_before.txt
-findstr /V /B /C:"pip==" /C:"setuptools==" /C:"wheel==" tmp\pip_freeze_before.txt > tmp\pip_to_uninstall.txt
-"%PY%" -m pip uninstall -y -r tmp\pip_to_uninstall.txt
+echo === [1/4] Removing cross-profile engine packages ===
+REM Uninstall packages that the cosyvoice / qwen3tts profiles install, plus
+REM the torch trio (we'll reinstall the right cu128 build below).  -y avoids
+REM prompts; missing packages emit a benign warning we suppress.
+"%PY%" -m pip uninstall -y torch torchaudio torchvision torchcodec ^
+    transformers accelerate qwen-tts ^
+    coqui-tts fish_speech pyannote-audio gruut demucs torchvggish ^
+    conformer diffusers hyperpyyaml hydra-core onnxruntime onnxruntime-gpu ^
+    deepspeed ormsgpack descript-audio-codec einops 2>nul
 if errorlevel 1 (
     echo [WARN] pip uninstall reported errors; continuing.
 )
 
-echo === [2/5] Installing matched torch trio ^(2.7.1+cu128^) ===
-"%PY%" -m pip install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu128 || goto :err
+echo === [2/4] Installing torch 2.7.1+cu128 trio ===
+"%PY%" -m pip install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 torchvision==0.22.1 ^
+    --index-url https://download.pytorch.org/whl/cu128 || goto :err
 
-echo === [3/5] Installing project requirements ===
-"%PY%" -m pip install --no-cache-dir -r requirements.txt || goto :err
-
-echo === [4/5] Installing extras ^(pyannote-audio, fish_speech, gruut, torchcodec, iso639-lang^) ===
-"%PY%" -m pip install --no-cache-dir torchcodec gruut iso639-lang || goto :err
-REM pyannote-audio>=4.0 requires lightning>=2.4 which has no Python 3.12 wheel on PyPI.
-REM --no-deps is safe: runtime shims are provided by pyannote_patch() in
-REM lib/classes/background_detector.py; torch/torchaudio already installed above.
+echo === [3/4] Installing engine-specific packages ===
+"%PY%" -m pip install --no-cache-dir ^
+    "transformers==4.57.6" "coqui-tts[languages]==0.27.5" ^
+    torchvggish torchcodec gruut ^
+    ormsgpack descript-audio-codec "einops>=0.7.0" || goto :err
+REM pyannote-audio>=4.0 declares lightning>=2.4 which has no Py3.12 wheel on
+REM PyPI.  --no-deps is safe: runtime shims live in
+REM lib/classes/background_detector.py (pyannote_patch).
 "%PY%" -m pip install --no-cache-dir --no-deps "pyannote-audio>=4.0.0" || goto :err
-REM fish-speech declares lightning>=2.1.0 which has no Python 3.12 wheel on PyPI.
-REM We install with --no-deps because our engine only uses the inference code,
-REM not the training framework (lightning, datasets, etc.) that fish-speech bundles.
-REM All runtime deps (torch, torchaudio, transformers, etc.) are already satisfied
-REM by the steps above.
+REM fish-speech declares lightning>=2.1.0 which also has no Py3.12 wheel.
+REM Our engine only uses fish-speech's inference path; full deps satisfied above.
 "%PY%" -m pip install --no-cache-dir --no-deps "git+https://github.com/fishaudio/fish-speech.git@v1.5.1" || goto :err
+"%PY%" -m pip install --no-cache-dir ext/py/demucs || goto :err
 
-echo === [5/5] Setting active engine profile ===
+echo === [4/4] Setting active engine profile ===
 type nul > .project-root
 > .engine-mode echo regular
 
