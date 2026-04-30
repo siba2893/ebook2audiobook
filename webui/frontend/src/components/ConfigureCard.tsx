@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConversionSettings } from "../api";
 import VoiceBrowser from "./VoiceBrowser";
 import VoicePreview from "./VoicePreview";
+
+interface EngineOption {
+  key: string;
+  label: string;
+}
 
 interface Props {
   sessionId: string;
@@ -40,6 +45,25 @@ function saveSettings(s: ConversionSettings) {
 
 export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }: Props) {
   const [settings, setSettings] = useState<ConversionSettings>(loadSettings());
+  const [engines, setEngines] = useState<EngineOption[]>([]);
+
+  // Fetch the engine list filtered by the install profile (.engine-mode marker).
+  useEffect(() => {
+    fetch("/api/engines")
+      .then((r) => r.json())
+      .then((data: { mode: string; engines: EngineOption[] }) => {
+        setEngines(data.engines);
+        // If the previously-saved engine isn't supported by the active install,
+        // fall back to the first one so the dropdown isn't blank.
+        if (data.engines.length && !data.engines.find((e) => e.key === settings.tts_engine)) {
+          setSettings((s) => ({ ...s, tts_engine: data.engines[0].key }));
+        }
+      })
+      .catch(() => {
+        /* leave engines = [] — UI shows an empty dropdown */
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function set<K extends keyof ConversionSettings>(key: K, value: ConversionSettings[K]) {
     setSettings((s) => ({ ...s, [key]: value }));
@@ -101,12 +125,9 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
               value={settings.tts_engine}
               onChange={(e) => set("tts_engine", e.target.value)}
             >
-              <option value="xtts">XTTSv2</option>
-              <option value="bark">Bark</option>
-              <option value="vits">VITS</option>
-              <option value="yourtts">YourTTS</option>
-              <option value="fishspeech">Fish Speech 1.5</option>
-              <option value="cosyvoice">CosyVoice 3</option>
+              {engines.map((e) => (
+                <option key={e.key} value={e.key}>{e.label}</option>
+              ))}
             </select>
           </div>
 

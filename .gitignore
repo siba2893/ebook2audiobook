@@ -33,3 +33,7 @@ voices/uploaded/*.mp3
 voices/uploaded/*.flac
 voices/spa/*.wav
 voices/spa/*.tsv
+
+# Runtime install markers — written by 1_regular_engines_install.cmd /
+# 2_cosy_voice_engine_install.cmd to scope the WebUI engine dropdown.
+.engine-mode

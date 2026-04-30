@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
     # Shutdown: nothing to explicitly clean up
 
 
-from routers import sessions, voices, library, preview
+from routers import sessions, voices, library, preview, engines
 
 app = FastAPI(title="ebook2audiobook API", lifespan=lifespan)
 
@@ -53,6 +53,7 @@ app.include_router(sessions.router, prefix="/api")
 app.include_router(voices.router, prefix="/api")
 app.include_router(library.router, prefix="/api")
 app.include_router(preview.router, prefix="/api")
+app.include_router(engines.router, prefix="/api")
 
 # Serve built frontend if it exists
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
