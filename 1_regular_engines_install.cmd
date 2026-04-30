@@ -45,12 +45,13 @@ echo === [3/4] Installing engine-specific packages ===
     "transformers==4.57.6" "coqui-tts[languages]==0.27.5" ^
     torchvggish torchcodec gruut ^
     ormsgpack descript-audio-codec "einops>=0.7.0" || goto :err
-REM pyannote-audio>=4.0 declares lightning>=2.4 which has no Py3.12 wheel on
-REM PyPI.  --no-deps is safe: runtime shims live in
-REM lib/classes/background_detector.py (pyannote_patch).
-"%PY%" -m pip install --no-cache-dir --no-deps "pyannote-audio>=4.0.0" || goto :err
-REM fish-speech declares lightning>=2.1.0 which also has no Py3.12 wheel.
-REM Our engine only uses fish-speech's inference path; full deps satisfied above.
+REM pyannote-audio>=4.0 requires lightning>=2.4. lightning 2.6.1 now has Py3.12
+REM wheels, so we install with full deps (needed for speechbrain, asteroid-filterbanks, etc.)
+REM Pin torchmetrics<1.7 to avoid a torchvision circular-import triggered by
+REM torchmetrics 1.7+ pulling in arniqa which imports torchvision at module level.
+"%PY%" -m pip install --no-cache-dir "pyannote-audio>=4.0.0" "torchmetrics<1.7" || goto :err
+REM fish-speech: keep --no-deps to avoid pulling in datasets, wandb, tensorboard,
+REM funasr, etc. (~30 extra packages we don't use). Inference deps satisfied above.
 "%PY%" -m pip install --no-cache-dir --no-deps "git+https://github.com/fishaudio/fish-speech.git@v1.5.1" || goto :err
 "%PY%" -m pip install --no-cache-dir ext/py/demucs || goto :err
 

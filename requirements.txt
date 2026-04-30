@@ -36,9 +36,10 @@ pandas>=1.0,<4.0
 gradio>=5.49.1
 markdown
 pyannote-audio==3.4.0; python_version < '3.12'
-# pyannote-audio 4.x (Py3.12+): installed with --no-deps in 1_regular_engines_install.cmd
-# because pyannote-audio>=4.0 requires lightning>=2.4 which has no Py3.12 wheel on PyPI.
-# Runtime shims are provided by pyannote_patch() in lib/classes/background_detector.py.
+pyannote-audio>=4.0.0; python_version >= '3.12'
+# torchmetrics 1.7+ imports torchvision.transforms at module load via arniqa,
+# triggering a circular import with our torchvision==0.22.1+cu128 build.
+torchmetrics<1.7
 huggingface_hub>=0.36.2,<1.0; python_version < '3.12'
 huggingface_hub>=0.36.2; python_version >= '3.12'
 torch==2.7.1; python_version < '3.12'
