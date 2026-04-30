@@ -84,19 +84,24 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                     error = f'load_engine(): HuggingFace checkpoint loading failed: {e}'
                     raise RuntimeError(error) from e
             if engine is not None:
-                try:
-                    import deepspeed
-                    engine = deepspeed.init_inference(
-                        engine,
-                        mp_size=1,
-                        dtype=self.amp_dtype,
-                        replace_with_kernel_inject=False
-                    )
-                    print("DeepSpeed inference initialized for XTTSv2")
-                except ImportError:
-                    pass
-                except Exception as e:
-                    print(f"DeepSpeed initialization failed: {e}")
+                # DeepSpeed inference is opt-in via OMC_XTTS_DEEPSPEED=1.  Without
+                # the full CUDA Toolkit (CUDA_HOME / nvcc), init_inference fails
+                # *after* mutating internal modules, leaving the engine in a
+                # half-wrapped state that breaks .cpu() transfers in inference().
+                if os.environ.get('OMC_XTTS_DEEPSPEED') == '1':
+                    try:
+                        import deepspeed
+                        engine = deepspeed.init_inference(
+                            engine,
+                            mp_size=1,
+                            dtype=self.amp_dtype,
+                            replace_with_kernel_inject=False
+                        )
+                        print("DeepSpeed inference initialized for XTTSv2")
+                    except ImportError:
+                        pass
+                    except Exception as e:
+                        print(f"DeepSpeed initialization failed: {e}")
 
                 msg = f'TTS {self.tts_key} Loaded!'
                 print(msg)
@@ -157,7 +162,10 @@ class XTTSv2(TTSUtils, TTSRegistry, name='xtts'):
                             if self.speaker in default_engine_settings[TTS_ENGINES['XTTSv2']]['voices'].keys():
                                 self.params['gpt_cond_latent'], self.params['speaker_embedding'] = self.xtts_speakers[default_engine_settings[TTS_ENGINES['XTTSv2']]['voices'][self.speaker]].values()
                             else:
-                                self.params['gpt_cond_latent'], self.params['speaker_embedding'] = self.engine.get_conditioning_latents(audio_path=[self.params['current_voice']], librosa_trim_db=30, load_sr=24000, sound_norm_refs=True)  
+                                # librosa_trim_db is omitted: upstream coqui-tts 0.27.5 calls
+                                # librosa.effects.trim on a GPU tensor (xtts.py:362-367), which
+                                # raises "can't convert cuda:0 device type tensor to numpy".
+                                self.params['gpt_cond_latent'], self.params['speaker_embedding'] = self.engine.get_conditioning_latents(audio_path=[self.params['current_voice']], load_sr=24000, sound_norm_refs=True)
                             self.params['latent_embedding'][self.params['current_voice']] = self.params['gpt_cond_latent'], self.params['speaker_embedding']
                         with torch.inference_mode():
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=amp_enabled):

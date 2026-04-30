@@ -394,18 +394,22 @@ class TTSUtils:
                     #   • running on a GPU (compile on CPU is slower, not faster)
                     #   • not already compiled (avoid double-wrapping on cache hit)
                     using_gpu = self.session.get('device', 'cpu') != devices['CPU']['proc']
+                    # torch.compile is opt-in via OMC_XTTS_COMPILE=1.  reduce-overhead
+                    # mode used CUDA graphs that elided explicit .cpu() transfers in
+                    # Coqui's Xtts.inference(); default mode wraps the model in an
+                    # OptimizedModule whose __bool__ raises (handled at call sites).
+                    # The bulk of the perf wins (TF32, Flash SDPA, inference_mode,
+                    # GPU residency) do not require torch.compile.
                     if (
                         using_gpu
+                        and os.environ.get('OMC_XTTS_COMPILE') == '1'
                         and hasattr(torch, 'compile')
                         and not getattr(engine, '_omo_compiled', False)
                     ):
                         try:
-                            # fullgraph=False: XTTS has dynamic control flow that can't be
-                            # fully traced; mode='reduce-overhead' lowers kernel-launch cost
-                            # without requiring a full static graph.
-                            engine = torch.compile(engine, fullgraph=False, mode='reduce-overhead')
+                            engine = torch.compile(engine, fullgraph=False, mode='default')
                             engine._omo_compiled = True
-                            print('[torch.compile] XTTS engine compiled with reduce-overhead mode.')
+                            print('[torch.compile] XTTS engine compiled (default mode).')
                         except Exception as _compile_err:
                             print(f'[torch.compile] skipped: {_compile_err}')
                     if self.session['free_vram_gb'] > models_loaded_size_gb:
@@ -474,7 +478,9 @@ class TTSUtils:
                         if speaker in default_engine_settings[xtts]['voices'].keys():
                             gpt_cond_latent, speaker_embedding = self.xtts_speakers[default_engine_settings[xtts]['voices'][speaker]].values()
                         else:
-                            gpt_cond_latent, speaker_embedding = engine.get_conditioning_latents(audio_path=[current_voice], librosa_trim_db=30, load_sr=24000, sound_norm_refs=True)
+                            # See note in xtts.py: librosa_trim_db omitted to avoid
+                            # upstream librosa-on-GPU bug in coqui-tts 0.27.5.
+                            gpt_cond_latent, speaker_embedding = engine.get_conditioning_latents(audio_path=[current_voice], load_sr=24000, sound_norm_refs=True)
                         fine_tuned_params = self._build_xtts_fine_tuned_params()
                         with torch.inference_mode():
                             engine.to(device)

@@ -47,6 +47,11 @@ class Tortoise(TTSUtils, TTSRegistry, name='tortoise'):
             seed = 0
             #random.seed(seed)
             self.amp_dtype = self._apply_gpu_policy(enough_vram=enough_vram, seed=seed)
+            # Tortoise's HiFiGAN vocoder has FP32 biases that conflict with FP16
+            # autocast inputs ("Input type c10::Half and bias type float should be
+            # the same"). Force FP32 for this engine specifically.
+            import torch as _t
+            self.amp_dtype = _t.float32
             self.xtts_speakers = self._load_xtts_builtin_list()
             self.engine = self.load_engine()
         except Exception as e:

@@ -32,6 +32,11 @@ class Bark(TTSUtils, TTSRegistry, name='bark'):
             seed = 0
             #random.seed(seed)
             self.amp_dtype = self._apply_gpu_policy(enough_vram=enough_vram, seed=seed)
+            # Bark's sub-models contain FP32 biases that conflict with FP16 autocast
+            # inputs ("Input type float and bias type c10::Half should be the same").
+            # Force FP32 for this engine.
+            import torch as _t
+            self.amp_dtype = _t.float32
             self.xtts_speakers = self._load_xtts_builtin_list()
             self.engine = self.load_engine()
         except Exception as e:
@@ -79,8 +84,11 @@ class Bark(TTSUtils, TTSRegistry, name='bark'):
             from lib.classes.tts_engines.common.audio import trim_audio, is_audio_data_valid
             if self.engine:
                 device = devices['CUDA']['proc'] if self.session['device'] in [devices['CUDA']['proc'], devices['ROCM']['proc'], devices['JETSON']['proc']] else self.session['device']
-                if device != devices['CPU']['proc']:
-                    self.engine.to(device)
+                # NOTE: Bark cannot be GPU-resident across the per-part loop the
+                # way XTTS can — its upstream voice-cloning pipeline runs HuBERT
+                # on CPU and feeds CPU tensors to GPU sub-models, causing
+                # "Input type (FloatTensor) and weight type (cuda.FloatTensor)"
+                # mismatches.  Per-part to/from is restored below inside the loop.
                 sentence_parts = self._split_sentence_on_sml(sentence)
                 self.params['block_voice'] = kwargs.get('block_voice', self.session['voice'])
                 if self.params.get('inline_voice'):
@@ -142,6 +150,8 @@ class Bark(TTSUtils, TTSRegistry, name='bark'):
                         if self.speaker not in self.engine.speakers:
                             speaker_argument['speaker_wav'] = self.params['current_voice']
                         with torch.inference_mode():
+                            if device != devices['CPU']['proc']:
+                                self.engine.to(device)
                             with torch.autocast(device, dtype=self.amp_dtype, enabled=(self.amp_dtype != torch.float32)):
                                 audio_part = self.engine.tts(
                                     text=part,
@@ -150,6 +160,8 @@ class Bark(TTSUtils, TTSRegistry, name='bark'):
                                     **speaker_argument,
                                     **fine_tuned_params
                                 )
+                            if device != devices['CPU']['proc']:
+                                self.engine.to(devices['CPU']['proc'])
                         if is_audio_data_valid(audio_part):
                             src_tensor = self._tensor_type(audio_part)
                             part_tensor = src_tensor.cpu().unsqueeze(0)

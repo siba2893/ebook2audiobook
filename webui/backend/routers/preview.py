@@ -126,9 +126,12 @@ def _synthesize(req: PreviewRequest, text: str) -> str:
     # Wrap in a DictProxy-compatible shim so engine code can use [] and .get()
     session = _DictShim(session)
 
-    # Output WAV file
+    # Output WAV file + per-call scratch dir for engines that materialise
+    # intermediate audio (fairseq/tacotron/glowtts/vits write tmp WAVs into
+    # voice_dir/proc/ during voice-conversion).
     tmp_dir = tempfile.mkdtemp(prefix="e2a_preview_")
     out_wav = os.path.join(tmp_dir, "preview.wav")
+    session["voice_dir"] = tmp_dir
 
     from lib.classes.tts_manager import TTSManager
     tts: TTSManager = TTSManager(session)

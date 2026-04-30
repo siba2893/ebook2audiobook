@@ -213,13 +213,18 @@ class TestPerformanceOptimizations(unittest.TestCase):
 
     def test_no_engine_cpu_shuffle_in_any_engine(self):
         """
-        Across ALL 8 engines, self.engine[_zs].to(devices['CPU']['proc']) must not
-        appear anywhere — that pattern is what triggered per-sentence GPU↔CPU
-        shuffling.  The model stays on GPU for the lifetime of a conversion job.
+        Across the GPU-resident engines, self.engine[_zs].to(devices['CPU']['proc'])
+        must not appear — that pattern is what triggered per-sentence GPU↔CPU
+        shuffling.
+
+        Bark is the documented exception: its upstream voice-cloning pipeline
+        runs HuBERT on CPU and feeds CPU tensors to GPU sub-models, so the
+        model has to be shuffled around each call to avoid
+        "Input type FloatTensor and weight type cuda.FloatTensor" mismatches.
         """
         engine_files = [
-            'xtts.py', 'bark.py', 'vits.py', 'yourtts.py',
-            'tacotron.py', 'tortoise.py', 'glowtts.py', 'fairseq.py',
+            'xtts.py', 'vits.py', 'yourtts.py', 'tacotron.py',
+            'tortoise.py', 'glowtts.py', 'fairseq.py',
         ]
         offenders = []
         for fname in engine_files:
