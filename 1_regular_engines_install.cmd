@@ -37,8 +37,12 @@ echo === [2/5] Installing matched torch trio ^(2.7.1+cu128^) ===
 echo === [3/5] Installing project requirements ===
 "%PY%" -m pip install --no-cache-dir -r requirements.txt || goto :err
 
-echo === [4/5] Installing extras ^(fish_speech, gruut, torchcodec, iso639-lang^) ===
+echo === [4/5] Installing extras ^(pyannote-audio, fish_speech, gruut, torchcodec, iso639-lang^) ===
 "%PY%" -m pip install --no-cache-dir torchcodec gruut iso639-lang || goto :err
+REM pyannote-audio>=4.0 requires lightning>=2.4 which has no Python 3.12 wheel on PyPI.
+REM --no-deps is safe: runtime shims are provided by pyannote_patch() in
+REM lib/classes/background_detector.py; torch/torchaudio already installed above.
+"%PY%" -m pip install --no-cache-dir --no-deps "pyannote-audio>=4.0.0" || goto :err
 REM fish-speech declares lightning>=2.1.0 which has no Python 3.12 wheel on PyPI.
 REM We install with --no-deps because our engine only uses the inference code,
 REM not the training framework (lightning, datasets, etc.) that fish-speech bundles.
