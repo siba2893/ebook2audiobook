@@ -102,9 +102,15 @@ ENGINE_MATRIX = {
     # own bundled Chinese prompt+text example: hift's f0_predictor conv
     # (kernel=4) gets a 3-frame mel from upstream's flow output and crashes.
     # Skip until upstream supports modern torch; engine code fixes remain.
+    # CosyVoice 3 has a runtime incompatibility with torch >= 2.7 even on its
+    # own bundled Chinese prompt+text example: hift's f0_predictor conv
+    # (kernel=4) gets a 3-frame mel from upstream's flow output and crashes.
+    # Same failure on Fun-CosyVoice3-0.5B-2512 (the December 2025 model
+    # variant), so it's an upstream codebase issue not a model issue.
+    # Tracking issue: https://github.com/FunAudioLLM/CosyVoice/issues/1422
     "cosyvoice":  {"language": "spa", "voice": "spa",   "text": TEXT_SPA_LONG, "samplerate": 24000,
                    "requires": ["hyperpyyaml", "cosyvoice.cli.cosyvoice"],
-                   "known_broken": "CosyVoice3 hift/f0_predictor crashes on torch>=2.7 (upstream bug)"},
+                   "known_broken": "CosyVoice3 hift/f0_predictor crashes on torch>=2.7 (upstream issue #1422)"},
 }
 
 
