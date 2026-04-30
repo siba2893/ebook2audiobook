@@ -1,0 +1,7 @@
+# Windows batch scripts must have CRLF line endings to run correctly
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Shell scripts must have LF
+*.sh text eol=lf
+*.command text eol=lf
