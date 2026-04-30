@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ConversionSettings } from "../api";
+import { ConversionSettings, Voice, fetchVoiceTranscript, transcribeVoice } from "../api";
 import VoiceBrowser from "./VoiceBrowser";
 import VoicePreview from "./VoicePreview";
 
@@ -47,6 +47,9 @@ function saveSettings(s: ConversionSettings) {
 export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }: Props) {
   const [settings, setSettings] = useState<ConversionSettings>(loadSettings());
   const [engines, setEngines] = useState<EngineOption[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcribeError, setTranscribeError] = useState<string | null>(null);
 
   // Fetch the engine list filtered by the install profile (.engine-mode marker).
   useEffect(() => {
@@ -65,6 +68,16 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // When the selected voice or engine changes, load the cached transcript sidecar
+  // (<voice>.transcript.txt) into the qwen3tts_ref_text field.
+  useEffect(() => {
+    if (!selectedVoiceName || settings.tts_engine !== "qwen3tts") return;
+    fetchVoiceTranscript(selectedVoiceName).then((t) => {
+      setSettings((s) => ({ ...s, qwen3tts_ref_text: t }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVoiceName, settings.tts_engine]);
 
   function set<K extends keyof ConversionSettings>(key: K, value: ConversionSettings[K]) {
     setSettings((s) => ({ ...s, [key]: value }));
@@ -100,7 +113,10 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
 
       <VoiceBrowser
         selected={settings.voice_path}
-        onSelect={(p) => set("voice_path", p)}
+        onSelect={(v: Voice | null) => {
+          set("voice_path", v?.path ?? null);
+          setSelectedVoiceName(v?.name ?? null);
+        }}
       />
 
       <VoicePreview settings={settings} />
@@ -274,9 +290,49 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
               <textarea
                 className="input min-h-[80px]"
                 value={settings.qwen3tts_ref_text}
-                onChange={(e) => set("qwen3tts_ref_text", e.target.value)}
+                onChange={(e) => {
+                  set("qwen3tts_ref_text", e.target.value);
+                  setTranscribeError(null);
+                }}
                 placeholder="Transcript of the reference voice WAV. Leave blank to auto-transcribe with whisper on first use (cached as <voice>.transcript.txt next to the WAV)."
               />
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  className="btn-ghost flex items-center gap-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={transcribing || !selectedVoiceName}
+                  onClick={async () => {
+                    if (!selectedVoiceName) return;
+                    setTranscribing(true);
+                    setTranscribeError(null);
+                    try {
+                      const t = await transcribeVoice(selectedVoiceName);
+                      set("qwen3tts_ref_text", t);
+                    } catch (e: unknown) {
+                      setTranscribeError(e instanceof Error ? e.message : "Transcription failed");
+                    } finally {
+                      setTranscribing(false);
+                    }
+                  }}
+                >
+                  {transcribing ? (
+                    <>
+                      <TranscribeSpinner />
+                      transcribing…
+                    </>
+                  ) : (
+                    <>
+                      <MicIcon />
+                      transcribe voice
+                    </>
+                  )}
+                </button>
+                {!selectedVoiceName && (
+                  <span className="text-xs text-zinc-500">select a voice first</span>
+                )}
+                {transcribeError && (
+                  <span className="text-xs text-red-400 font-mono">{transcribeError}</span>
+                )}
+              </div>
               <p className="mt-1 text-xs text-zinc-500">
                 Providing a transcript switches Qwen3-TTS to full-fidelity cloning mode (better timbre + accent). Empty = auto-transcribe with whisper.
               </p>
@@ -291,5 +347,25 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
         </button>
       </div>
     </section>
+  );
+}
+
+function TranscribeSpinner() {
+  return (
+    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+      <circle cx="12" cy="12" r="10" strokeOpacity={0.25} />
+      <path d="M12 2a10 10 0 0 1 10 10" />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 10a7 7 0 0 0 14 0" />
+      <line x1="12" y1="19" x2="12" y2="22" />
+      <line x1="9" y1="22" x2="15" y2="22" />
+    </svg>
   );
 }

@@ -194,6 +194,29 @@ export async function deleteVoice(name: string): Promise<void> {
   await fetch(`${API}/api/voices/${encodeURIComponent(name)}`, { method: "DELETE" });
 }
 
+export async function fetchVoiceTranscript(name: string): Promise<string> {
+  try {
+    const r = await fetch(`${API}/api/voices/transcript/${name}`);
+    if (!r.ok) return "";
+    const data = await r.json();
+    return data.transcript ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Run faster-whisper on the voice file server-side and return the transcript.
+ *  The result is cached as a sidecar <voice>.transcript.txt by the backend. */
+export async function transcribeVoice(name: string): Promise<string> {
+  const r = await fetch(`${API}/api/voices/transcribe/${name}`, { method: "POST" });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error((err as { detail?: string }).detail ?? `HTTP ${r.status}`);
+  }
+  const data = await r.json();
+  return data.transcript ?? "";
+}
+
 // ---------------------------------------------------------------------------
 // Library
 // ---------------------------------------------------------------------------
