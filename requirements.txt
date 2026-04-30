@@ -34,6 +34,7 @@ stanza==1.10.1
 argostranslate==1.11.0
 pandas>=1.0,<4.0
 gradio>=5.49.1
+markdown
 pyannote-audio==3.4.0; python_version < '3.12'
 # pyannote-audio 4.x (Py3.12+): installed with --no-deps in 1_regular_engines_install.cmd
 # because pyannote-audio>=4.0 requires lightning>=2.4 which has no Py3.12 wheel on PyPI.
