@@ -513,21 +513,29 @@ npm run build      # production build → dist/
 
 ## Additional Engines
 
-The three optional high-quality engines — **Fish Speech 1.5**, **CosyVoice 3**, and **Qwen3-TTS** — are not included in the default install because they carry large dependencies or require a separate package ecosystem. Each must be installed once; after that the Web UI will expose it automatically.
+The three optional high-quality engines — **Fish Speech 1.5**, **CosyVoice 3**, and **Qwen3-TTS** — are not bundled in the default install because they carry large or conflicting dependencies. Each engine has a dedicated Windows installer script; Linux/macOS users can follow the manual steps below.
+
+> Each installer **wipes and reinstalls** `python_env/` dependencies so the engine's specific torch version is in place. Run only one installer at a time — the profiles are mutually exclusive (except Fish Speech 1.5, which shares the regular profile).
+
+---
 
 ### Fish Speech 1.5
 
 Zero-shot voice cloning (~88–92% similarity). **Non-commercial use only** ([CC-BY-NC-SA-4.0](https://huggingface.co/fishaudio/fish-speech-1.5)).
 
-```bash
-# Linux / macOS
-pip install fish-speech
+Fish Speech is included in the **regular** profile alongside the other 9 engines.
 
-# Windows (CUDA)
-pip install fish-speech
+**Windows** — run the regular installer (already includes Fish Speech):
+```bat
+1_regular_engines_install.cmd
 ```
 
-Then start the app normally — the `Fish Speech 1.5` option will appear in the engine dropdown.
+**Linux / macOS**:
+```bash
+pip install "git+https://github.com/fishaudio/fish-speech.git@v1.5.1"
+```
+
+The `Fish Speech 1.5` option appears in the engine dropdown automatically once installed.
 
 ---
 
@@ -535,15 +543,27 @@ Then start the app normally — the `Fish Speech 1.5` option will appear in the 
 
 Zero-shot voice cloning with cross-lingual and instruct mode. **Apache 2.0, commercial use allowed.**
 
+> **Note**: CosyVoice requires `torch 2.3.1+cu121`, which conflicts with the regular engines' `torch 2.7.1+cu128`. Running `2_cosy_voice_engine_install.cmd` switches the entire environment. See [upstream issue #1422](https://github.com/FunAudioLLM/CosyVoice/issues/1422) for known dependency status.
+
+**Step 1** — clone the third-party repo (one-time):
 ```bash
-# Clone the third-party submodule (one-time)
 git clone --recursive https://github.com/FunAudioLLM/CosyVoice third_party/CosyVoice
-pip install -r third_party/CosyVoice/requirements.txt
 ```
 
-Activate in the Web UI: write `cosyvoice` to `.engine-mode` in the repo root, or select it from the engine dropdown (shown only when the mode file is present).
+**Step 2 — Windows**:
+```bat
+2_cosy_voice_engine_install.cmd
+```
 
-> **Note**: CosyVoice has a known upstream incompatibility with recent versions of certain dependencies. See [upstream issue #1422](https://github.com/FunAudioLLM/CosyVoice/issues/1422) for status.
+**Step 2 — Linux / macOS**:
+```bash
+pip install torch==2.3.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+pip install -r third_party/CosyVoice/requirements.txt
+pip install hyperpyyaml
+echo "cosyvoice" > .engine-mode
+```
+
+The `CosyVoice 3` option will appear in the engine dropdown once `.engine-mode` contains `cosyvoice`.
 
 ---
 
@@ -551,25 +571,27 @@ Activate in the Web UI: write `cosyvoice` to `.engine-mode` in the repo root, or
 
 Zero-shot voice cloning via Alibaba's Qwen3 transformer TTS. **Apache 2.0, commercial use allowed.**
 
-**Requirements**: ~6 GB VRAM (bfloat16), CUDA 11.8+. Model weights download automatically on first run (~3 GB from HuggingFace).
+**Requirements**: ~6 GB VRAM (bfloat16), CUDA 11.8+. Model weights (~3 GB) download automatically from HuggingFace on first inference.
 
+**Windows**:
+```bat
+3_qwen3tts_engine_install.cmd
+```
+
+**Linux / macOS**:
 ```bash
 pip install -U qwen-tts
-```
-
-Activate in the Web UI by writing `qwen3tts` to `.engine-mode` in the repo root:
-
-```bash
-# Linux / macOS
 echo "qwen3tts" > .engine-mode
-
-# Windows (PowerShell)
-"qwen3tts" | Out-File -Encoding ascii .engine-mode
 ```
 
-The `Qwen3-TTS` option will appear in the engine dropdown. Select a reference voice (`.wav`) in the Voice field — Qwen3-TTS clones the speaker style from that file without requiring a transcript.
+The `Qwen3-TTS` option will appear in the engine dropdown once `.engine-mode` contains `qwen3tts`. Select a reference voice (`.wav`) in the Voice field — Qwen3-TTS clones the speaker style from that file without requiring a transcript.
 
 **Supported languages**: Arabic, German, English, French, Italian, Japanese, Korean, Portuguese, Russian, Spanish, Chinese.
+
+**To switch back** to the regular engines at any time:
+```bat
+1_regular_engines_install.cmd
+```
 
 ---
 
