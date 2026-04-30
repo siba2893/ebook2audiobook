@@ -8,3 +8,4 @@ from .tacotron import Tacotron2
 from .yourtts import YourTTS
 from .fishspeech import FishSpeech
 from .cosyvoice import CosyVoice
+from .qwen3tts import Qwen3TTS

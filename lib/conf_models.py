@@ -14,7 +14,8 @@ TTS_ENGINES = {
     "TACOTRON2": "tacotron",
     "YOURTTS": "yourtts",
     "FISHSPEECH": "fishspeech",
-    "COSYVOICE": "cosyvoice"
+    "COSYVOICE": "cosyvoice",
+    "QWEN3TTS": "qwen3tts"
 }
 
 TTS_VOICE_CONVERSION = {
@@ -263,5 +264,22 @@ default_engine_settings = {
         "voice": default_speaker,
         "voices": {},
         "rating": {"VRAM": 5, "CPU": 2, "RAM": 4, "Realism": 5}
+    },
+    TTS_ENGINES['QWEN3TTS']: {
+        # Qwen3-TTS — zero-shot voice cloning via transformer-based TTS.
+        # Model weights: Apache 2.0 (commercial use allowed).
+        # Codebase: Apache 2.0.  https://github.com/QwenLM/Qwen3-TTS
+        # Install: pip install transformers>=4.51.0 soundfile
+        "repo": "Qwen/Qwen3-TTS",
+        "languages": {
+            "ara": "ar", "deu": "de", "eng": "en", "fra": "fr",
+            "ita": "it", "jpn": "ja", "kor": "ko", "por": "pt",
+            "rus": "ru", "spa": "es", "zho": "zh"
+        },
+        "samplerate": 24000,
+        "speed": 1.0,
+        "voice": default_speaker,
+        "voices": {},
+        "rating": {"VRAM": 6, "CPU": 2, "RAM": 6, "Realism": 5}
     }
 }

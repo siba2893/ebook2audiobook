@@ -111,6 +111,11 @@ ENGINE_MATRIX = {
     "cosyvoice":  {"language": "spa", "voice": "spa",   "text": TEXT_SPA_LONG, "samplerate": 24000,
                    "requires": ["hyperpyyaml", "cosyvoice.cli.cosyvoice"],
                    "known_broken": "CosyVoice3 hift/f0_predictor crashes on torch>=2.7 (upstream issue #1422)"},
+    # Qwen3-TTS: zero-shot voice cloning via qwen-tts package.
+    # Install: pip install -U qwen-tts
+    # Uses x_vector_only_mode for cloning so no reference transcript is needed.
+    "qwen3tts":   {"language": "spa", "voice": "spa",   "text": TEXT_SPA, "samplerate": 24000,
+                   "requires": ["qwen_tts"]},
 }
 
 

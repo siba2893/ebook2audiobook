@@ -11,10 +11,12 @@ at the repo root, written by one of the install scripts:
                                           Fish Speech 1.5)
   - `2_cosy_voice_engine_install.cmd` →  .engine-mode = "cosyvoice"
                                          (CosyVoice 3 only)
+  - `3_qwen3tts_engine_install.cmd`   →  .engine-mode = "qwen3tts"
+                                         (Qwen3-TTS only)
 
-The "regular" and "cosyvoice" installs use mutually-incompatible PyTorch
-versions, so the dropdown only shows the engines the current install actually
-supports.  No marker → defaults to "regular".
+The "regular", "cosyvoice", and "qwen3tts" installs use mutually-incompatible
+PyTorch/package sets, so the dropdown only shows the engines the current install
+actually supports.  No marker → defaults to "regular".
 """
 import os
 
@@ -35,11 +37,13 @@ _LABELS = {
     "yourtts":    "YourTTS",
     "fishspeech": "Fish Speech 1.5",
     "cosyvoice":  "CosyVoice 3",
+    "qwen3tts":   "Qwen3-TTS",
 }
 
 _REGULAR = ["xtts", "bark", "tortoise", "vits", "fairseq",
             "glowtts", "tacotron", "yourtts", "fishspeech"]
 _COSYVOICE_ONLY = ["cosyvoice"]
+_QWEN3TTS_ONLY = ["qwen3tts"]
 
 
 def _read_mode() -> str:
@@ -55,7 +59,12 @@ def _read_mode() -> str:
 @router.get("/engines")
 def list_engines():
     mode = _read_mode()
-    keys = _COSYVOICE_ONLY if mode == "cosyvoice" else _REGULAR
+    if mode == "cosyvoice":
+        keys = _COSYVOICE_ONLY
+    elif mode == "qwen3tts":
+        keys = _QWEN3TTS_ONLY
+    else:
+        keys = _REGULAR
     return {
         "mode": mode,
         "engines": [{"key": k, "label": _LABELS[k]} for k in keys],

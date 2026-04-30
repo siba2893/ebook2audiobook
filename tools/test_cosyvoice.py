@@ -73,9 +73,9 @@ class TestCosyVoiceRegistration(unittest.TestCase):
         for k in ('VRAM', 'CPU', 'RAM', 'Realism'):
             self.assertIn(k, rating)
 
-    def test_engine_count_is_ten(self):
+    def test_engine_count_is_eleven(self):
         from lib.conf_models import TTS_ENGINES
-        self.assertEqual(len(TTS_ENGINES), 10, f"Expected 10 engines, got {len(TTS_ENGINES)}")
+        self.assertEqual(len(TTS_ENGINES), 11, f"Expected 11 engines, got {len(TTS_ENGINES)}")
 
     def test_cosyvoice_registry_class_importable(self):
         from lib.classes.tts_engines.cosyvoice import CosyVoice
