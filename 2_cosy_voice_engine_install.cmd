@@ -34,7 +34,7 @@ REM Uninstall packages that the regular / qwen3tts profiles install, plus
 REM the torch trio (we'll reinstall cu121 below).  Missing-package warnings
 REM are suppressed.
 "%PY%" -m pip uninstall -y torch torchaudio torchvision torchcodec ^
-    transformers accelerate qwen-tts ^
+    transformers accelerate qwen-tts flash-attn ^
     coqui-tts fish_speech pyannote-audio gruut demucs torchvggish ^
     ormsgpack descript-audio-codec einops 2>nul
 if errorlevel 1 (

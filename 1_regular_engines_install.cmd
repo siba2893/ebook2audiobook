@@ -28,7 +28,7 @@ REM Uninstall packages that the cosyvoice / qwen3tts profiles install, plus
 REM the torch trio (we'll reinstall the right cu128 build below).  -y avoids
 REM prompts; missing packages emit a benign warning we suppress.
 "%PY%" -m pip uninstall -y torch torchaudio torchvision torchcodec ^
-    transformers accelerate qwen-tts ^
+    transformers accelerate qwen-tts flash-attn ^
     coqui-tts fish_speech pyannote-audio gruut demucs torchvggish ^
     conformer diffusers hyperpyyaml hydra-core onnxruntime onnxruntime-gpu ^
     deepspeed ormsgpack descript-audio-codec einops 2>nul

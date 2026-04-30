@@ -43,10 +43,21 @@ echo === [2/4] Installing torch 2.7.1+cu128 trio ===
 "%PY%" -m pip install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 torchvision==0.22.1 ^
     --index-url https://download.pytorch.org/whl/cu128 || goto :err
 
-echo === [3/4] Installing qwen-tts ===
+echo === [3/5] Installing qwen-tts ===
 "%PY%" -m pip install --no-cache-dir -U qwen-tts || goto :err
 
-echo === [4/4] Setting active engine profile ===
+echo === [4/5] Installing flash-attn 2.7.4 ^(Windows wheel for cp312 + cu128 + torch 2.7^) ===
+REM PyPI ships flash-attn for Linux only; this Windows wheel comes from
+REM the lldacing prebuild repo and matches our exact env (cp312 +
+REM torch 2.7 + cu128 + cxx11abiFALSE).  flash-attn gives ~2-3x faster
+REM Qwen3-TTS inference; install failure is non-fatal — qwen-tts falls
+REM back to PyTorch eager attention (slower but works).
+"%PY%" -m pip install --no-cache-dir "https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1%%2Bcu128torch2.7.0cxx11abiFALSE-cp312-cp312-win_amd64.whl"
+if errorlevel 1 (
+    echo [WARN] flash-attn install failed — Qwen3-TTS will run without it ^(slower but functional^).
+)
+
+echo === [5/5] Setting active engine profile ===
 type nul > .project-root
 > .engine-mode echo qwen3tts
 
