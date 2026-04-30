@@ -39,7 +39,12 @@ echo === [3/5] Installing project requirements ===
 
 echo === [4/5] Installing extras ^(fish_speech, gruut, torchcodec, iso639-lang^) ===
 "%PY%" -m pip install --no-cache-dir torchcodec gruut iso639-lang || goto :err
-"%PY%" -m pip install --no-cache-dir "git+https://github.com/fishaudio/fish-speech.git@v1.5.1" || goto :err
+REM fish-speech declares lightning>=2.1.0 which has no Python 3.12 wheel on PyPI.
+REM We install with --no-deps because our engine only uses the inference code,
+REM not the training framework (lightning, datasets, etc.) that fish-speech bundles.
+REM All runtime deps (torch, torchaudio, transformers, etc.) are already satisfied
+REM by the steps above.
+"%PY%" -m pip install --no-cache-dir --no-deps "git+https://github.com/fishaudio/fish-speech.git@v1.5.1" || goto :err
 
 echo === [5/5] Setting active engine profile ===
 type nul > .project-root

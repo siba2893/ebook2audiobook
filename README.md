@@ -532,7 +532,9 @@ Fish Speech is included in the **regular** profile alongside the other 9 engines
 
 **Linux / macOS**:
 ```bash
-pip install "git+https://github.com/fishaudio/fish-speech.git@v1.5.1"
+# --no-deps bypasses lightning>=2.1.0 which has no Python 3.12 wheel on PyPI;
+# all runtime deps (torch, torchaudio, transformers) are already installed.
+pip install --no-deps "git+https://github.com/fishaudio/fish-speech.git@v1.5.1"
 ```
 
 The `Fish Speech 1.5` option appears in the engine dropdown automatically once installed.
