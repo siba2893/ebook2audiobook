@@ -2,12 +2,16 @@
 REM ===========================================================================
 REM base_installation.cmd
 REM
-REM Step 1 of the install flow.  Wipes python_env/ pip packages and installs
-REM the engine-agnostic base — everything that does NOT depend on a specific
-REM PyTorch version.  At the end, prompts you to pick one of the three engine
-REM profiles to install on top.
+REM Step 1 of the install flow.  Installs the engine-agnostic base —
+REM everything that does NOT depend on a specific PyTorch version.
 REM
-REM Profiles (run individually after base, or pick one at the prompt below):
+REM Idempotent by default: re-running this script just verifies that the
+REM expected packages are installed and skips pip work if they are.
+REM Use `base_installation.cmd --force` to wipe python_env/ pip packages
+REM and do a full clean reinstall.
+REM
+REM At the end, prompts you to pick one of the three engine profiles to
+REM install on top.  Run individually later if you skip the prompt:
 REM   1_regular_engines_install.cmd      ->  XTTS, Bark, Tortoise, VITS,
 REM                                          Fairseq, GlowTTS, Tacotron2,
 REM                                          YourTTS, Fish Speech 1.5
@@ -24,37 +28,25 @@ if not exist "%PY%" (
     exit /b 1
 )
 
-if not exist tmp\nul mkdir tmp
+REM Forward --force to the Python helper.
+set FORCE_FLAG=
+if /I "%~1"=="--force" set FORCE_FLAG=--force
+if /I "%~1"=="-f" set FORCE_FLAG=--force
 
-echo === [1/3] Wiping python_env packages ===
-"%PY%" -m pip freeze > tmp\pip_freeze_before.txt
-findstr /V /B /C:"pip==" /C:"setuptools==" /C:"wheel==" tmp\pip_freeze_before.txt > tmp\pip_to_uninstall.txt
-"%PY%" -m pip uninstall -y -r tmp\pip_to_uninstall.txt
+echo === [1/2] Checking / installing engine-agnostic base packages ===
+"%PY%" tools\base_install.py %FORCE_FLAG%
 if errorlevel 1 (
-    echo [WARN] pip uninstall reported errors; continuing.
+    echo [ERROR] base install failed.  See output above.
+    exit /b 1
 )
 
-echo === [2/3] Installing engine-agnostic base packages ===
-REM Pure-Python or near-pure-Python deps from requirements.txt that DO NOT
-REM depend on a specific torch version.  Each engine profile installs its
-REM own torch + engine-specific libs on top of this.
-"%PY%" -m pip install --no-cache-dir ^
-    cryptography py-cpuinfo tqdm regex docker ebooklib python-pptx python-docx ^
-    fastapi "uvicorn[standard]" hf_xet beautifulsoup4 nagisa pymupdf pymupdf-layout ^
-    pytesseract unidic hangul-romanize iso639-lang soynlp jieba pycantonese ^
-    pypinyin pythainlp mutagen PyOpenGL phonemizer-fork pydub unidecode langdetect ^
-    phonemizer indic-nlp-library "stanza==1.10.1" "argostranslate==1.11.0" ^
-    "pandas>=1.0,<4.0" "gradio>=5.49.1" "huggingface_hub>=0.36.2" basedpyright ^
-    requests soundfile || goto :err
-"%PY%" -m pip install --no-cache-dir ext/py/num2words || goto :err
-
-echo === [3/3] Resetting marker files ===
+echo === [2/2] Resetting marker files ===
 type nul > .project-root
 > .engine-mode echo none
 
 echo.
 echo ===========================================================================
-echo   Base install complete.
+echo   Base install ready.
 echo ===========================================================================
 echo.
 echo   Pick an engine profile to install on top of base:
@@ -95,8 +87,3 @@ echo   1_regular_engines_install.cmd
 echo   2_cosy_voice_engine_install.cmd
 echo   3_qwen3tts_engine_install.cmd
 exit /b 0
-
-:err
-echo.
-echo [ERROR] base install step failed.  See output above.
-exit /b 1
