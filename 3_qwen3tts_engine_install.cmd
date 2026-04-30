@@ -1,15 +1,19 @@
 @echo off
 REM ===========================================================================
-REM 1_regular_engines_install.cmd
+REM 3_qwen3tts_engine_install.cmd
 REM
-REM Wipes python_env/ pip packages and installs the "regular" 9-engine
-REM profile: XTTSv2, Bark, Tortoise, VITS, Fairseq, GlowTTS, Tacotron2,
-REM YourTTS, Fish Speech 1.5.  CosyVoice 3 is NOT supported in this profile
-REM (its required torch version conflicts with the rest).
+REM Wipes python_env/ pip packages and installs the "qwen3tts" profile.
+REM Uses torch 2.7.1+cu128 with qwen-tts (transformers 4.57.3, accelerate
+REM 1.12.0). The other 9 regular engines are NOT included in this profile.
 REM
-REM After this script, the WebUI engine dropdown shows the 9 regular engines.
-REM To switch to CosyVoice-only, run 2_cosy_voice_engine_install.cmd.
-REM To switch to Qwen3-TTS-only, run 3_qwen3tts_engine_install.cmd.
+REM Model weights (~3 GB) are downloaded automatically from HuggingFace on
+REM first inference: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+REM
+REM Requirements: ~6 GB VRAM (bfloat16), CUDA 11.8+.
+REM
+REM After this script, the WebUI engine dropdown shows ONLY Qwen3-TTS.
+REM To switch back to the regular engines, run 1_regular_engines_install.cmd.
+REM To switch to CosyVoice, run 2_cosy_voice_engine_install.cmd.
 REM ===========================================================================
 setlocal
 cd /d %~dp0
@@ -31,23 +35,23 @@ if errorlevel 1 (
     echo [WARN] pip uninstall reported errors; continuing.
 )
 
-echo === [2/5] Installing matched torch trio ^(2.7.1+cu128^) ===
+echo === [2/5] Installing torch 2.7.1+cu128 ===
 "%PY%" -m pip install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu128 || goto :err
 
 echo === [3/5] Installing project requirements ===
 "%PY%" -m pip install --no-cache-dir -r requirements.txt || goto :err
 
-echo === [4/5] Installing extras ^(fish_speech, gruut, torchcodec, iso639-lang^) ===
-"%PY%" -m pip install --no-cache-dir torchcodec gruut iso639-lang || goto :err
-"%PY%" -m pip install --no-cache-dir "git+https://github.com/fishaudio/fish-speech.git@v1.5.1" || goto :err
+echo === [4/5] Installing qwen-tts ===
+"%PY%" -m pip install --no-cache-dir -U qwen-tts || goto :err
 
 echo === [5/5] Setting active engine profile ===
 type nul > .project-root
-> .engine-mode echo regular
+> .engine-mode echo qwen3tts
 
 echo.
 echo === Done ===
-echo   Active profile: regular ^(9 engines^)
+echo   Active profile: qwen3tts ^(Qwen3-TTS only^)
+echo   Model weights will download on first inference ^(~3 GB^).
 echo   Run start_webui.cmd to launch.
 exit /b 0
 
