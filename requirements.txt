@@ -50,10 +50,10 @@ ext/py/num2words
 ext/py/demucs
 
 # Fish Speech 1.5 — zero-shot voice cloning (CC-BY-NC-SA-4.0, non-commercial only)
-# Not on PyPI. Install via git URL (pip will handle it) or clone + pip install -e .[cu128].
-# Note: torch.compile is disabled on Windows/macOS (Triton not available).
-# Linux system deps required: apt install portaudio19-dev libsox-dev ffmpeg
-git+https://github.com/fishaudio/fish-speech.git@v1.5.1
+# Installed separately in the install scripts with --no-deps because fish-speech
+# declares lightning>=2.1.0 which has no Python 3.12 wheel on PyPI.
+# All actual runtime deps (torch, torchaudio, transformers, etc.) are satisfied
+# by the packages above. Do NOT add fish-speech here — see 1_regular_engines_install.cmd.
 ormsgpack
 descript-audio-codec
 einops>=0.7.0
