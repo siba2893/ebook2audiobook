@@ -44,7 +44,13 @@ class FishSpeech(TTSUtils, TTSRegistry, name='fishspeech'):
             self.cleanup_memory()
 
             try:
-                from fish_speech.models.dac.inference import load_model as load_decoder_model
+                # fish-speech 1.5 ships the VQ-GAN decoder under models.vqgan;
+                # 1.6+ renamed it to models.dac.  Try the new path first then fall
+                # back to the 1.5 path so both releases work.
+                try:
+                    from fish_speech.models.dac.inference import load_model as load_decoder_model
+                except ImportError:
+                    from fish_speech.models.vqgan.inference import load_model as load_decoder_model
                 from fish_speech.models.text2semantic.inference import launch_thread_safe_queue
                 from fish_speech.inference_engine import TTSInferenceEngine
             except ImportError as e:
@@ -181,10 +187,10 @@ class FishSpeech(TTSUtils, TTSRegistry, name='fishspeech'):
                 audio_chunks = []
                 with torch.inference_mode():
                     for result in self.engine.inference(request):
-                        if result.code == 'header':
-                            continue
-                        elif result.code == 'data':
-                            # result.audio is (sample_rate, np.ndarray)
+                        # Result codes (fish_speech 1.5+): header | segment | final | error.
+                        # 'segment' only fires when req.streaming=True; non-streaming
+                        # path delivers everything in a single 'final' event.
+                        if result.code in ('segment', 'final'):
                             _, chunk = result.audio
                             audio_chunks.append(chunk)
                         elif result.code == 'error':

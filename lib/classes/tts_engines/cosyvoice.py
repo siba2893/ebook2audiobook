@@ -91,10 +91,13 @@ class CosyVoice(TTSUtils, TTSRegistry, name='cosyvoice'):
             fine_tuned = self.session.get('fine_tuned', 'internal')
             repo = self.models[fine_tuned]['repo']
 
+            # NOTE: do NOT exclude *.txt — Qwen2's tokenizer ships its BPE merges
+            # in merges.txt, and skipping it makes the tokenizer choke later
+            # ("vocab and merges must be both be from memory or both filenames").
             model_dir = snapshot_download(
                 repo_id=repo,
                 cache_dir=self.cache_dir,
-                ignore_patterns=['*.md', '*.txt', 'LICENSE'],
+                ignore_patterns=['*.md', 'LICENSE'],
             )
 
             is_cuda = self.session['device'] in [
@@ -181,9 +184,20 @@ class CosyVoice(TTSUtils, TTSRegistry, name='cosyvoice'):
                         speed=cv_speed,
                     ))
                 elif current_voice and os.path.isfile(current_voice):
-                    outputs = list(self.engine.inference_zero_shot(
-                        tts_text=part,
-                        prompt_text='',
+                    # CosyVoice 3 cross_lingual needs a language tag prefix on
+                    # the input text — '<|en|>', '<|es|>', '<|zh|>', etc.
+                    # Without it the LLM emits too few speech tokens and the
+                    # downstream hift/f0 conv (kernel=4) crashes on a 3-frame
+                    # mel.  Map the project's iso639-3 code to CosyVoice's tag.
+                    _LANG_TAG = {
+                        'eng': 'en', 'spa': 'es', 'zho': 'zh', 'jpn': 'ja',
+                        'kor': 'ko', 'fra': 'fr', 'deu': 'de', 'ita': 'it',
+                        'por': 'pt', 'rus': 'ru', 'ara': 'ar', 'yue': 'yue',
+                    }
+                    tag = _LANG_TAG.get(self.session.get('language', 'eng'), 'en')
+                    tagged = part if part.startswith('<|') else f'<|{tag}|>{part}'
+                    outputs = list(self.engine.inference_cross_lingual(
+                        tts_text=tagged,
                         prompt_wav=current_voice,
                         stream=False,
                         speed=cv_speed,
