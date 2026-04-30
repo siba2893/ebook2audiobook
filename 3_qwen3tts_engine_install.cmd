@@ -43,8 +43,14 @@ echo === [2/4] Installing torch 2.7.1+cu128 trio ===
 "%PY%" -m pip install --no-cache-dir torch==2.7.1 torchaudio==2.7.1 torchvision==0.22.1 ^
     --index-url https://download.pytorch.org/whl/cu128 || goto :err
 
-echo === [3/5] Installing qwen-tts ===
+echo === [3/5] Installing qwen-tts + faster-whisper ===
 "%PY%" -m pip install --no-cache-dir -U qwen-tts || goto :err
+REM faster-whisper is used to auto-transcribe reference voice WAVs into
+REM the ref_text required for full-fidelity voice cloning (better timbre
+REM and accent than x_vector_only_mode).  Result is cached in a sidecar
+REM <voice>.transcript.txt next to the WAV — first use downloads the
+REM 'small' model (~250 MB) once.
+"%PY%" -m pip install --no-cache-dir faster-whisper || goto :err
 
 echo === [4/5] Installing flash-attn 2.7.4 ^(Windows wheel for cp312 + cu128 + torch 2.7^) ===
 REM PyPI ships flash-attn for Linux only; this Windows wheel comes from

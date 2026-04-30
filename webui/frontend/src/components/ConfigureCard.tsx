@@ -29,6 +29,7 @@ const DEFAULTS: ConversionSettings = {
   fishspeech_max_new_tokens: 1024,
   cosyvoice_speed: 1.0,
   cosyvoice_instruct_text: "",
+  qwen3tts_ref_text: "",
 };
 
 function loadSettings(): ConversionSettings {
@@ -263,6 +264,23 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
                 />
               </div>
             </>
+          )}
+
+          {settings.tts_engine === "qwen3tts" && (
+            <div className="col-span-2">
+              <label className="label">
+                voice transcript <span className="text-zinc-500">(optional)</span>
+              </label>
+              <textarea
+                className="input min-h-[80px]"
+                value={settings.qwen3tts_ref_text}
+                onChange={(e) => set("qwen3tts_ref_text", e.target.value)}
+                placeholder="Transcript of the reference voice WAV. Leave blank to auto-transcribe with whisper on first use (cached as <voice>.transcript.txt next to the WAV)."
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Providing a transcript switches Qwen3-TTS to full-fidelity cloning mode (better timbre + accent). Empty = auto-transcribe with whisper.
+              </p>
+            </div>
           )}
         </div>
       </div>

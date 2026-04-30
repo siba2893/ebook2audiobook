@@ -37,3 +37,6 @@ voices/spa/*.tsv
 # Runtime install markers — written by 1_regular_engines_install.cmd /
 # 2_cosy_voice_engine_install.cmd to scope the WebUI engine dropdown.
 .engine-mode
+
+# qwen3tts auto-transcribed reference transcripts (per-voice sidecar files)
+*.transcript.txt

@@ -120,6 +120,7 @@ export interface ConversionSettings {
   fishspeech_max_new_tokens: number;
   cosyvoice_speed: number;
   cosyvoice_instruct_text: string;
+  qwen3tts_ref_text: string;
 }
 
 export async function startConversion(
@@ -258,6 +259,7 @@ export interface PreviewRequest {
   fishspeech_max_new_tokens: number;
   cosyvoice_speed: number;
   cosyvoice_instruct_text: string;
+  qwen3tts_ref_text: string;
 }
 
 /**

@@ -34,6 +34,11 @@ class PreviewRequest(BaseModel):
     fishspeech_max_new_tokens: int = 1024
     cosyvoice_speed: float = 1.0
     cosyvoice_instruct_text: str = ""
+    # Qwen3-TTS — transcript of the reference voice audio.  When provided,
+    # qwen3tts.py uses full-fidelity voice cloning instead of falling back
+    # to x_vector_only_mode (which upstream documents as lower quality).
+    # Empty string = let the engine auto-transcribe via faster-whisper.
+    qwen3tts_ref_text: str = ""
 
 
 @router.post("/preview")
@@ -121,6 +126,8 @@ def _synthesize(req: PreviewRequest, text: str) -> str:
         # CosyVoice-specific
         "cosyvoice_speed": req.cosyvoice_speed,
         "cosyvoice_instruct_text": req.cosyvoice_instruct_text,
+        # Qwen3-TTS-specific
+        "qwen3tts_ref_text": req.qwen3tts_ref_text,
     }
 
     # Wrap in a DictProxy-compatible shim so engine code can use [] and .get()
