@@ -118,6 +118,8 @@ export interface ConversionSettings {
   fishspeech_top_p: number;
   fishspeech_repetition_penalty: number;
   fishspeech_max_new_tokens: number;
+  cosyvoice_speed: number;
+  cosyvoice_instruct_text: string;
 }
 
 export async function startConversion(
@@ -254,6 +256,8 @@ export interface PreviewRequest {
   fishspeech_top_p: number;
   fishspeech_repetition_penalty: number;
   fishspeech_max_new_tokens: number;
+  cosyvoice_speed: number;
+  cosyvoice_instruct_text: string;
 }
 
 /**

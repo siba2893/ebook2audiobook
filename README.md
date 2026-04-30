@@ -103,7 +103,7 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
 
 
 ## Features
-- 🔧 **TTS Engines supported**: `XTTSv2`, `Bark`, `Fairseq`, `VITS`, `Tacotron2`, `Tortoise`, `GlowTTS`, `YourTTS`
+- 🔧 **TTS Engines supported**: `XTTSv2`, `Bark`, `Fairseq`, `VITS`, `Tacotron2`, `Tortoise`, `GlowTTS`, `YourTTS`, `Fish Speech 1.5`, `CosyVoice 3`
 - 📚 **Convert multiple file formats**: `.epub`, `.mobi`, `.azw3`, `.fb2`, `.lrf`, `.rb`, `.snb`, `.tcr`, `.pdf`, `.txt`, `.rtf`, `.doc`, `.docx`, `.html`, `.odt`, `.azw`, `.tiff`, `.tif`, `.png`, `.jpg`, `.jpeg`, `.bmp`
 - 💻 **TextArea** to convert directly a short text in audio
 - 🔍 **OCR scanning** for files with text pages as images
@@ -119,6 +119,7 @@ https://github.com/user-attachments/assets/81c4baad-117e-4db5-ac86-efc2b7fea921
 - 🌐 **Modern React/FastAPI Web UI** — full conversion flow, live SSE progress, audiobook library, and session resume ([see below](#modern-web-ui))
 - ⚡ **Significantly faster GPU inference** — all 9 engines optimized for throughput on RTX 30/40-series and equivalent ([see below](#performance-improvements))
 - 🐟 **Fish Speech 1.5** — new high-quality zero-shot voice cloning engine (~88–92% similarity); non-commercial use only ([CC-BY-NC-SA-4.0](https://huggingface.co/fishaudio/fish-speech-1.5))
+- 🎤 **CosyVoice 3** — zero-shot voice cloning with cross-lingual and instruct mode (dialect/emotion/speed control); Apache 2.0, commercial use allowed ([FunAudioLLM/CosyVoice](https://github.com/FunAudioLLM/CosyVoice))
 
 
 ##  Hardware Requirements

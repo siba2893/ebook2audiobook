@@ -32,6 +32,8 @@ class PreviewRequest(BaseModel):
     fishspeech_top_p: float = 0.8
     fishspeech_repetition_penalty: float = 1.1
     fishspeech_max_new_tokens: int = 1024
+    cosyvoice_speed: float = 1.0
+    cosyvoice_instruct_text: str = ""
 
 
 @router.post("/preview")
@@ -116,6 +118,9 @@ def _synthesize(req: PreviewRequest, text: str) -> str:
         "fishspeech_top_p": req.fishspeech_top_p,
         "fishspeech_repetition_penalty": req.fishspeech_repetition_penalty,
         "fishspeech_max_new_tokens": req.fishspeech_max_new_tokens,
+        # CosyVoice-specific
+        "cosyvoice_speed": req.cosyvoice_speed,
+        "cosyvoice_instruct_text": req.cosyvoice_instruct_text,
     }
 
     # Wrap in a DictProxy-compatible shim so engine code can use [] and .get()

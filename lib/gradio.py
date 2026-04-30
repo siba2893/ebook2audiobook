@@ -26,6 +26,7 @@ def build_interface(args:dict)->gr.Blocks:
         visible_gr_tab_xtts_params = interface_component_options['gr_tab_xtts_params']
         visible_gr_tab_bark_params = interface_component_options['gr_tab_bark_params']
         visible_gr_tab_fishspeech_params = interface_component_options.get('gr_tab_fishspeech_params', True)
+        visible_gr_tab_cosyvoice_params = interface_component_options.get('gr_tab_cosyvoice_params', True)
         visible_gr_group_voice_file = interface_component_options['gr_group_voice_file']
         visible_gr_group_custom_model = interface_component_options['gr_group_custom_model']
         js_hide_elements = 'document.querySelector("#ebook_textarea_toolbar")?.remove();'
@@ -814,6 +815,32 @@ def build_interface(args:dict)->gr.Blocks:
                                 elem_id='gr_fishspeech_max_new_tokens',
                                 info='Maximum number of tokens to generate per chunk.'
                             )
+                    with gr.Tab('CosyVoice Settings', elem_id='gr_tab_cosyvoice_params', elem_classes='gr-tab', visible=False) as gr_tab_cosyvoice_params:
+                        gr.Markdown(
+                            elem_id='gr_markdown_tab_cosyvoice_params',
+                            value='''
+                            ### Customize CosyVoice Parameters
+                            Adjust the settings below to control speech speed and optional instruct mode.
+                            CosyVoice model weights are Apache 2.0 (commercial use allowed).
+                            '''
+                        )
+                        with gr.Group(elem_id='gr_group_cosyvoice_params', elem_classes=['gr-group']):
+                            gr_cosyvoice_speed = gr.Slider(
+                                label='Speed',
+                                minimum=0.5,
+                                maximum=2.0,
+                                step=0.1,
+                                value=float(default_engine_settings[TTS_ENGINES['COSYVOICE']]['speed']),
+                                elem_id='gr_cosyvoice_speed',
+                                info='Speech speed multiplier. 1.0 is normal speed.'
+                            )
+                            gr_cosyvoice_instruct_text = gr.Textbox(
+                                label='Instruct Text (optional)',
+                                value=default_engine_settings[TTS_ENGINES['COSYVOICE']]['instruct_text'],
+                                elem_id='gr_cosyvoice_instruct_text',
+                                placeholder='e.g. 请用广东话表达。 — leave empty for standard zero-shot cloning',
+                                info='CosyVoice2/3 instruct mode: free-text style/dialect/emotion instruction. Leave blank for zero-shot cloning.'
+                            )
                 
                 with gr.Group(elem_id='gr_group_progress', elem_classes=['gr-group-sides-padded']):
                     gr_progress_markdown = gr.Markdown(elem_id='gr_progress_markdown', elem_classes=['gr-markdown'], value='Status')
@@ -1183,6 +1210,7 @@ def build_interface(args:dict)->gr.Blocks:
                             visible_xtts = False
                             visible_bark = False
                             visible_fishspeech = False
+                            visible_cosyvoice = False
                             visible_ebook_src = False
                             visible_ebook_textarea = False
                             enabled_convert_btn = False
@@ -1194,6 +1222,8 @@ def build_interface(args:dict)->gr.Blocks:
                                 visible_bark = visible_gr_tab_bark_params
                             elif session['tts_engine'] == TTS_ENGINES['FISHSPEECH']:
                                 visible_fishspeech = visible_gr_tab_fishspeech_params
+                            elif session['tts_engine'] == TTS_ENGINES['COSYVOICE']:
+                                visible_cosyvoice = visible_gr_tab_cosyvoice_params
                             if session['ebook_mode'] == ebook_modes['DIRECTORY']:
                                 visible_ebook_src = True
                                 ebook_data = session['ebook_list']
@@ -1207,7 +1237,7 @@ def build_interface(args:dict)->gr.Blocks:
                             return (
                                 gr.update(value='', visible=False), gr.update(visible=visible_main),
                                 gr.update(visible=visible_xtts), gr.update(visible=visible_bark),
-                                gr.update(visible=visible_fishspeech),
+                                gr.update(visible=visible_fishspeech), gr.update(visible=visible_cosyvoice),
                                 gr.update(interactive=enabled_convert_btn), gr.update(visible=visible_ebook_src, value=ebook_data), gr.update(visible=visible_ebook_textarea, value=ebook_textarea),
                                 gr.update(value=session['device']), gr.update(value=session['audiobook']), update_gr_audiobook_list(session_id),
                                 update_gr_voice_list(session_id), gr.update(value='')
@@ -1770,12 +1800,14 @@ def build_interface(args:dict)->gr.Blocks:
                             visible_bark = False
                             visible_xtts = False
                             visible_fishspeech = False
+                            visible_cosyvoice = False
                             if session['tts_engine'] == TTS_ENGINES['XTTSv2']:
                                 visible_custom_model = True if session['fine_tuned'] == 'internal' else False
                                 visible_xtts = visible_gr_tab_xtts_params
                                 return (
                                     gr.update(value=show_rating(session['tts_engine'])), 
                                     gr.update(visible=visible_xtts),
+                                    gr.update(visible=False),
                                     gr.update(visible=False),
                                     gr.update(visible=False),
                                     gr.update(visible=visible_custom_model),
@@ -1789,11 +1821,14 @@ def build_interface(args:dict)->gr.Blocks:
                                     visible_bark = visible_gr_tab_bark_params
                                 elif session['tts_engine'] == TTS_ENGINES['FISHSPEECH']:
                                     visible_fishspeech = visible_gr_tab_fishspeech_params
+                                elif session['tts_engine'] == TTS_ENGINES['COSYVOICE']:
+                                    visible_cosyvoice = visible_gr_tab_cosyvoice_params
                                 return (
                                     gr.update(value=show_rating(session['tts_engine'])),
                                     gr.update(visible=False),
                                     gr.update(visible=visible_bark),
                                     gr.update(visible=visible_fishspeech),
+                                    gr.update(visible=visible_cosyvoice),
                                     gr.update(visible=False),
                                     update_gr_fine_tuned_list(session_id),
                                     gr.update(label=f"*Upload Custom Model not available for {session['tts_engine']}"),
@@ -2561,7 +2596,7 @@ def build_interface(args:dict)->gr.Blocks:
                 gr_voice_player_hidden, gr_voice_play, gr_voice_del_btn, gr_custom_model_del_btn
             ]
             outputs_refresh_interface = [
-                gr_modal, gr_group_main, gr_tab_xtts_params, gr_tab_bark_params, gr_tab_fishspeech_params, gr_convert_btn,
+                gr_modal, gr_group_main, gr_tab_xtts_params, gr_tab_bark_params, gr_tab_fishspeech_params, gr_tab_cosyvoice_params, gr_convert_btn,
                 gr_ebook_src, gr_ebook_textarea, gr_device, gr_audiobook_player, gr_audiobook_list,
                 gr_voice_list, gr_progress
             ]
@@ -2660,7 +2695,7 @@ def build_interface(args:dict)->gr.Blocks:
             gr_tts_engine_list.change(
                 fn=change_gr_tts_engine_list,
                 inputs=[gr_session, gr_tts_engine_list],
-                outputs=[gr_tts_rating, gr_tab_xtts_params, gr_tab_bark_params, gr_tab_fishspeech_params, gr_group_custom_model, gr_fine_tuned_list, gr_custom_model_file, gr_custom_model_list, gr_custom_model_label],
+                outputs=[gr_tts_rating, gr_tab_xtts_params, gr_tab_bark_params, gr_tab_fishspeech_params, gr_tab_cosyvoice_params, gr_group_custom_model, gr_fine_tuned_list, gr_custom_model_file, gr_custom_model_list, gr_custom_model_label],
                 show_progress_on=[gr_progress]
             ).then(
                 fn=update_gr_voice_list,
@@ -2994,6 +3029,37 @@ def build_interface(args:dict)->gr.Blocks:
             gr_fishspeech_max_new_tokens.change(
                 fn=lambda session_id, val: change_param('fishspeech_max_new_tokens', session_id, int(val)),
                 inputs=[gr_session, gr_fishspeech_max_new_tokens],
+                outputs=None
+            )
+
+            ########### CosyVoice Params
+
+            gr_tab_cosyvoice_params.select(
+                fn=None,
+                inputs=None,
+                outputs=None,
+                js='''
+                    ()=>{
+                        if (!window._cosyvoice_sliders_initialized) {
+                            const checkExist = setInterval(() => {
+                                const slider = document.querySelector("#gr_cosyvoice_speed input[type=range]");
+                                if(slider){
+                                    clearInterval(checkExist);
+                                    window._cosyvoice_sliders_initialized = true;
+                                }
+                            }, 500);
+                        }
+                    }
+                '''
+            )
+            gr_cosyvoice_speed.change(
+                fn=lambda session_id, val: change_param('cosyvoice_speed', session_id, float(val)),
+                inputs=[gr_session, gr_cosyvoice_speed],
+                outputs=None
+            )
+            gr_cosyvoice_instruct_text.change(
+                fn=lambda session_id, val: change_param('cosyvoice_instruct_text', session_id, str(val)),
+                inputs=[gr_session, gr_cosyvoice_instruct_text],
                 outputs=None
             )
 

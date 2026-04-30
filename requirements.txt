@@ -57,3 +57,14 @@ git+https://github.com/fishaudio/fish-speech.git@v1.5.1
 ormsgpack
 descript-audio-codec
 einops>=0.7.0
+
+# CosyVoice 2 / 3 — zero-shot voice cloning (Apache 2.0, commercial use allowed)
+# Not on PyPI. Clone once into third_party/CosyVoice, then install its requirements:
+#   git clone --recursive https://github.com/FunAudioLLM/CosyVoice third_party/CosyVoice
+#   pip install -r third_party/CosyVoice/requirements.txt
+#   # Restore project deps pinned higher than CosyVoice's requirements.txt:
+#   pip install "numpy>=2.0" "pydantic>=2.10" "fsspec>=2024.6"
+# Linux system deps: apt install sox libsox-dev
+# Note: GPU ONNX acceleration (onnxruntime-gpu) is Linux-only; Windows uses CPU ONNX.
+#       PyTorch LLM backbone still runs on CUDA on Windows.
+# Note: vLLM and TensorRT acceleration are optional; disabled by default in cosyvoice.py.

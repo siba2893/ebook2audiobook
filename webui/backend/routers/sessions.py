@@ -406,6 +406,8 @@ class StartRequest(BaseModel):
     fishspeech_top_p: float = 0.8
     fishspeech_repetition_penalty: float = 1.1
     fishspeech_max_new_tokens: int = 1024
+    cosyvoice_speed: float = 1.0
+    cosyvoice_instruct_text: str = ""
 
 
 def _build_args(session_id: str, req: "StartRequest", lang_pt3: str, lang_pt1: str, blocks_preview: bool) -> dict[str, Any]:
@@ -452,6 +454,9 @@ def _build_args(session_id: str, req: "StartRequest", lang_pt3: str, lang_pt1: s
         "fishspeech_top_p": req.fishspeech_top_p,
         "fishspeech_repetition_penalty": req.fishspeech_repetition_penalty,
         "fishspeech_max_new_tokens": req.fishspeech_max_new_tokens,
+        # CosyVoice
+        "cosyvoice_speed": req.cosyvoice_speed,
+        "cosyvoice_instruct_text": req.cosyvoice_instruct_text,
         "ebook_list": None,
         "ebook_textarea": None,
         "custom_model": None,

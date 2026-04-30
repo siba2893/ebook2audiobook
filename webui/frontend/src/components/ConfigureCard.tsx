@@ -22,6 +22,8 @@ const DEFAULTS: ConversionSettings = {
   fishspeech_top_p: 0.8,
   fishspeech_repetition_penalty: 1.1,
   fishspeech_max_new_tokens: 1024,
+  cosyvoice_speed: 1.0,
+  cosyvoice_instruct_text: "",
 };
 
 function loadSettings(): ConversionSettings {
@@ -104,6 +106,7 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
               <option value="vits">VITS</option>
               <option value="yourtts">YourTTS</option>
               <option value="fishspeech">Fish Speech 1.5</option>
+              <option value="cosyvoice">CosyVoice 3</option>
             </select>
           </div>
 
@@ -209,6 +212,33 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
                   step={256}
                   value={settings.fishspeech_max_new_tokens}
                   onChange={(e) => set("fishspeech_max_new_tokens", Number(e.target.value))}
+                />
+              </div>
+            </>
+          )}
+
+          {settings.tts_engine === "cosyvoice" && (
+            <>
+              <div>
+                <label className="label">speed</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0.5}
+                  max={2.0}
+                  step={0.1}
+                  value={settings.cosyvoice_speed}
+                  onChange={(e) => set("cosyvoice_speed", Number(e.target.value))}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="label">instruct text (optional)</label>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="e.g. 请用广东话表达。 — leave empty for zero-shot cloning"
+                  value={settings.cosyvoice_instruct_text}
+                  onChange={(e) => set("cosyvoice_instruct_text", e.target.value)}
                 />
               </div>
             </>

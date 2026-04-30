@@ -7,3 +7,4 @@ from .tortoise import Tortoise
 from .tacotron import Tacotron2
 from .yourtts import YourTTS
 from .fishspeech import FishSpeech
+from .cosyvoice import CosyVoice

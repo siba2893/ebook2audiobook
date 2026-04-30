@@ -13,7 +13,8 @@ TTS_ENGINES = {
     "GLOWTTS": "glowtts",
     "TACOTRON2": "tacotron",
     "YOURTTS": "yourtts",
-    "FISHSPEECH": "fishspeech"
+    "FISHSPEECH": "fishspeech",
+    "COSYVOICE": "cosyvoice"
 }
 
 TTS_VOICE_CONVERSION = {
@@ -240,5 +241,27 @@ default_engine_settings = {
         "voice": default_speaker,
         "voices": {},
         "rating": {"VRAM": 4, "CPU": 2, "RAM": 4, "Realism": 5}
+    },
+    TTS_ENGINES['COSYVOICE']: {
+        # CosyVoice 2 / 3 — zero-shot voice cloning with cross-lingual and instruct modes.
+        # Model weights: Apache 2.0 (commercial use allowed).
+        # Codebase: Apache 2.0.  https://github.com/FunAudioLLM/CosyVoice
+        # Requires: git clone --recursive https://github.com/FunAudioLLM/CosyVoice
+        #           into third_party/CosyVoice (Matcha-TTS submodule included).
+        "repo": "FunAudioLLM/Fun-CosyVoice3-0.5B",
+        "languages": {
+            "ara": "ar", "deu": "de", "eng": "en", "fra": "fr",
+            "ita": "it", "jpn": "ja", "kor": "ko", "por": "pt",
+            "rus": "ru", "spa": "es", "zho": "zh", "yue": "yue"
+        },
+        "samplerate": 24000,
+        "speed": 1.0,
+        # instruct_text: optional free-text instruction for CosyVoice2/3 instruct mode.
+        # Leave empty for standard zero-shot cloning.
+        # Example: "请用广东话表达。" or "用尽可能快地语速说一句话。"
+        "instruct_text": "",
+        "voice": default_speaker,
+        "voices": {},
+        "rating": {"VRAM": 5, "CPU": 2, "RAM": 4, "Realism": 5}
     }
 }
