@@ -131,12 +131,21 @@ Standalone profile, mirrors `3_qwen3tts_engine_install.cmd` line-for-line with `
 
 _Filled in after Phase 5._
 
-| Backend | RTF (1-sentence smoke) | Notes |
-|---|---|---|
-| `qwen-tts` + TF32 + cudnn.benchmark | 6.9 (3.28s audio in 22.6s inference) | Phase 2 e2e on TEXT_SPA, 4060 8 GB, cudnn autotune already warm. |
-| `faster-qwen-tts` (SDPA) | 8.0 (2.70s audio in 21.6s inference) | Phase 5 first run, **includes both predictor and talker CUDA-graph capture**. Steady-state per-sentence cost is what matters for an audiobook — not measured by this 1-sentence test. |
+### Steady-state benchmark (5 sentences, RTX 4060 8 GB, profile 5)
 
-The 1-sentence numbers do **not** show the fast backend's value: graph capture is paid once per process, then amortizes across every subsequent sentence. The next benchmark step (multi-sentence batch) will show the steady-state delta.
+`tools/bench_qwen3tts.py` runs the same 5-sentence Spanish script through each backend in a fresh subprocess (so model caches and CUDA graphs don't leak across).
+
+| Backend | Load | s1 (cold) | s2..s5 (steady) | All 5 |
+|---|---|---|---|---|
+| `qwen-tts` (upstream) | 10.84 s | 13.63 s / 3.27 s audio (RTF 4.17) | 51.68 s / 17.57 s audio (RTF **2.94**) | 65.31 s / 20.84 s audio (RTF **3.13**) |
+| `faster-qwen-tts` (fork) | 10.64 s | 12.60 s / 3.16 s audio (RTF 3.99) | 20.58 s / 18.56 s audio (RTF **1.11**) | 33.18 s / 21.72 s audio (RTF **1.53**) |
+
+**Speedup, fast vs upstream:**
+- Steady-state per-sentence: **2.65x** (RTF 2.94 → 1.11)
+- Whole 5-sentence batch including cold-start: **2.05x** (RTF 3.13 → 1.53)
+- For a multi-thousand-sentence audiobook the steady-state number dominates: expect ~2.6-2.7x wall-clock reduction.
+
+The fork's first sentence (12.60 s, includes both predictor and talker CUDA-graph capture) is already faster than the upstream's first sentence (13.63 s). After that, fast backend runs ~5 s/sentence vs upstream's ~12 s/sentence on the same hardware.
 
 ### Phase 5 finding: force SDPA on the fast backend
 
