@@ -133,8 +133,11 @@ _Filled in after Phase 5._
 
 | Backend | RTF (1-sentence smoke) | Notes |
 |---|---|---|
-| `qwen-tts` + TF32 + cudnn.benchmark | 8.5 (3.13s audio in 26.7s inference) | First-call includes cudnn autotune cost; not a steady-state number. Phase 1 e2e smoke run on TEXT_SPA, 4060 8 GB. |
-| `qwen-tts` (no Phase 1 knobs) | not measured | We didn't capture a pre-Phase-1 baseline before applying the change; would need to revert+rerun. Acceptable since the change is non-invasive. |
-| `faster-qwen-tts` | TBD | Phase 5 |
+| `qwen-tts` + TF32 + cudnn.benchmark | 6.9 (3.28s audio in 22.6s inference) | Phase 2 e2e on TEXT_SPA, 4060 8 GB, cudnn autotune already warm. |
+| `faster-qwen-tts` (SDPA) | 8.0 (2.70s audio in 21.6s inference) | Phase 5 first run, **includes both predictor and talker CUDA-graph capture**. Steady-state per-sentence cost is what matters for an audiobook — not measured by this 1-sentence test. |
 
-For meaningful comparison, Phase 5 will run a 5+ sentence batch on each backend (so first-call autotune amortizes) and measure both total RTF and time-to-first-audio.
+The 1-sentence numbers do **not** show the fast backend's value: graph capture is paid once per process, then amortizes across every subsequent sentence. The next benchmark step (multi-sentence batch) will show the steady-state delta.
+
+### Phase 5 finding: force SDPA on the fast backend
+
+First run with `flash_attention_2` failed: `transformers/integrations/flash_attention.py` does CPU/GPU sync ops (`.item()` calls inside `is_fa_with_varlen_kwargs` / `position_ids` checks) that are forbidden during CUDA-graph capture. The fork errors out with `CUDA error: operation not permitted when stream is capturing` the first time `generate_voice_clone` runs. Fix: `_FasterQwenTtsBackend.load()` ignores the wrapper's `attn_impl` and forces `'sdpa'` (the fork's documented default). Profile 5's install script no longer installs flash-attn — useless on this path, reinstalled when switching back to profile 3.

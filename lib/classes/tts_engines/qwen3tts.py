@@ -208,11 +208,18 @@ class _FasterQwenTtsBackend(_Backend):
         # only supports a single CUDA device; the index is ignored.
         device = 'cuda' if device_map.startswith('cuda') else device_map
         max_seq_len = int(opts.get('max_seq_len') or 2048)
+        # Ignore `attn_impl` from the wrapper and force SDPA: transformers'
+        # flash_attention_2 forward path does CPU/GPU sync ops (`.item()`
+        # inside is_fa_with_varlen_kwargs / position_ids checks) that are
+        # forbidden during CUDA-graph capture, so the fork errors out with
+        # "operation not permitted when stream is capturing" the first time
+        # generate_voice_clone is called.  SDPA is the fork's documented
+        # default and is graph-capture-safe.
         return FasterQwen3TTS.from_pretrained(
             repo,
             device=device,
             dtype=dtype,
-            attn_implementation=attn_impl,
+            attn_implementation='sdpa',
             max_seq_len=max_seq_len,
         )
 
