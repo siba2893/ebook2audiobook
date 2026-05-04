@@ -342,6 +342,25 @@ class TestPerformanceOptimizations(unittest.TestCase):
         self.assertIn('self._silence_cache.get(silence_samples)', source,
                       "Per-sentence break tensor should be looked up in _silence_cache")
 
+    def test_qwen3tts_perf_knobs_present(self):
+        """
+        TF32 (set_float32_matmul_precision('high')) and cudnn.benchmark must
+        stay enabled in Qwen3TTS.load_engine().  Both apply before the model
+        is loaded and provide a measurable boost on Ada/Ampere with no
+        audible quality cost — see qwen3-fast-integration-plan.md Phase 1.
+        """
+        engine_path = os.path.join('lib', 'classes', 'tts_engines', 'qwen3tts.py')
+        with open(engine_path, 'r', encoding='utf-8') as f:
+            source = f.read()
+        self.assertIn(
+            "torch.set_float32_matmul_precision('high')", source,
+            "TF32 enable line dropped from qwen3tts.py — restore in load_engine()."
+        )
+        self.assertIn(
+            'torch.backends.cudnn.benchmark = True', source,
+            "cudnn.benchmark toggle dropped from qwen3tts.py — restore in load_engine()."
+        )
+
     def test_xtts_word_end_pattern_module_level(self):
         """
         The trailing-word regex should be compiled once at module load, not on

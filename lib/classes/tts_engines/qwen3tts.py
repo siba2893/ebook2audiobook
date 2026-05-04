@@ -143,6 +143,16 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                 devices['JETSON']['proc'],
             ]
 
+            # Perf knobs applied before the first weight load.  TF32 unlocks
+            # Ada/Ampere tensor-core matmuls at fp32 precision (negligible
+            # quality impact on TTS); cudnn.benchmark autotunes conv kernels
+            # for the fixed shapes the AR decode loop sees every step.  Both
+            # are global torch settings — fine for the qwen3tts profile,
+            # which uninstalls every other engine.
+            if is_cuda:
+                torch.set_float32_matmul_precision('high')
+                torch.backends.cudnn.benchmark = True
+
             device_map = 'cuda:0' if is_cuda else 'cpu'
             dtype = torch.bfloat16 if is_cuda else torch.float32
 
