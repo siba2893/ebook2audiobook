@@ -14,6 +14,29 @@ from lib.classes.tts_engines.common.preset_loader import load_engine_presets
 #   2. create_voice_clone_prompt(...) is built ONCE per voice + ref_text and
 #      reused across every sentence in a conversion job.  Saves the per-call
 #      prompt-feature recomputation and removes a source of timbre drift.
+#   3. Sampling temperature is dropped from the package default 0.9 to 0.7
+#      (talker + sub-talker) and repetition_penalty bumped to 1.1.  Audiobook
+#      narration wants timbre/prosody stability across thousands of sentences;
+#      0.9 is creative-speech territory and produces noticeable per-sentence
+#      drift.  See qwen_tts/inference/qwen3_tts_model.py:_merge_generate_kwargs
+#      for the full hard-default table.
+#   4. torch.manual_seed is set before each generate_voice_clone call so the
+#      sampler starts from the same RNG state every sentence — same input,
+#      same output, with no cross-sentence randomness leaking through.
+
+# Tuned generation defaults for narration.  Each may be overridden via
+# session['qwen3tts_<key>'] (no UI exposure today; see preview.py wiring
+# pattern if you ever want to surface these).
+_NARRATION_GEN_DEFAULTS = {
+    'temperature': 0.7,
+    'top_p': 0.9,
+    'top_k': 50,
+    'repetition_penalty': 1.1,
+    'subtalker_temperature': 0.7,
+    'subtalker_top_p': 0.9,
+    'subtalker_top_k': 50,
+}
+_NARRATION_SEED_DEFAULT = 0
 
 # ISO 639-3 → Qwen3-TTS language string mapping.
 _LANG_MAP = {
@@ -83,6 +106,8 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
             # Voice-clone prompt cache: (voice_path, ref_text) -> prompt items.
             # Built lazily; survives the lifetime of the engine instance.
             self._voice_prompt_cache = {}
+            self._gen_kwargs = self._resolve_gen_kwargs()
+            self._seed = int(self.session.get('qwen3tts_seed', _NARRATION_SEED_DEFAULT) or 0)
             self.engine = self.load_engine()
         except Exception as e:
             raise ValueError(f'Qwen3TTS.__init__() error: {e}') from e
@@ -139,6 +164,55 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
             return engine
         except Exception as e:
             raise RuntimeError(f'Qwen3TTS.load_engine() error: {e}') from e
+
+    def _resolve_gen_kwargs(self) -> dict:
+        """Build the generate() kwargs from tuned defaults + optional session overrides.
+
+        Each key may be overridden via session['qwen3tts_<key>'].  An empty
+        string or None falls back to the tuned default.  We never pass None
+        through to the upstream `_merge_generate_kwargs` because that would
+        re-resurrect the package's permissive defaults (temperature=0.9 etc).
+        """
+        out = {}
+        for key, default in _NARRATION_GEN_DEFAULTS.items():
+            session_val = self.session.get(f'qwen3tts_{key}', None)
+            if session_val is None or session_val == '':
+                out[key] = default
+                continue
+            try:
+                out[key] = type(default)(session_val)
+            except (TypeError, ValueError):
+                out[key] = default
+        return out
+
+    def _seed_torch(self) -> None:
+        """Reset the RNG before each generate call.
+
+        Using a fixed seed at the start of every sentence keeps the sampler
+        from drifting across sentences: each generate_voice_clone call starts
+        from the same RNG state, so timbre/prosody stays consistent over the
+        course of an audiobook.  Different texts still produce different
+        outputs because input_ids differ — the seed only fixes the sampling
+        noise, not the content.
+        """
+        try:
+            import torch
+            torch.manual_seed(self._seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self._seed)
+        except Exception:
+            pass
+
+    def _set_voice(self, voice):
+        """Override the XTTS-flavored builtin-speaker path in TTSUtils.
+
+        Qwen3-TTS is zero-shot across all supported languages, so there is no
+        cross-language "convert builtin voice" step.  The qwen3tts install
+        profile also uninstalls Coqui-TTS, which would make the parent
+        implementation crash with `No module named 'TTS'`.  Just pass the
+        voice path through unchanged.
+        """
+        return voice, None
 
     def _resolve_ref_text(self, voice_path: str) -> str:
         """Return the best available transcript for this voice.
@@ -223,12 +297,16 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
             if self.params.get('inline_voice'):
                 self.params['current_voice'] = self.params['inline_voice']
             else:
-                self.params['current_voice'], error = self._set_voice(self.params['block_voice'])
-                if self.params['current_voice'] is None and error is not None:
-                    return False, error
-                if self.session['voice'] == self.params['block_voice']:
-                    self.session['voice'] = self.params['current_voice']
-                self.params['block_voice'] = self.params['current_voice']
+                # Qwen3-TTS is zero-shot: it has no builtin speakers and the
+                # qwen3tts install profile uninstalls Coqui-TTS, so the XTTS
+                # builtin-speaker fallback in _set_voice() cannot work.
+                # Require an explicit voice file up front with a clear error.
+                if not (self.params['block_voice'] and os.path.isfile(self.params['block_voice'])):
+                    return False, (
+                        'Qwen3-TTS requires a reference voice file for zero-shot cloning. '
+                        'Please upload a 30–60s WAV in the settings before starting conversion.'
+                    )
+                self.params['current_voice'] = self.params['block_voice']
 
             self.audio_segments = []
 
@@ -261,10 +339,12 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                 if not any(c.isalnum() for c in part):
                     continue
 
+                self._seed_torch()
                 wavs, sr = self.engine.generate_voice_clone(
                     text=part,
                     language=qwen_lang,
                     voice_clone_prompt=voice_clone_prompt,
+                    **self._gen_kwargs,
                 )
 
                 if not wavs or len(wavs) == 0:
@@ -280,11 +360,19 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                 part_tensor = audio_tensor.unsqueeze(0)  # → (1, samples)
 
                 # Resample if engine sample rate differs from expected.
+                # Kaiser-windowed sinc with a wide lowpass keeps the high-frequency
+                # detail that the codec actually produces; torchaudio's defaults
+                # use a much narrower kernel that audibly softens sibilants.
                 if sr != samplerate:
                     resampler = self.resampler_cache.get((sr, samplerate))
                     if resampler is None:
                         resampler = torchaudio.transforms.Resample(
-                            orig_freq=sr, new_freq=samplerate
+                            orig_freq=sr,
+                            new_freq=samplerate,
+                            lowpass_filter_width=64,
+                            rolloff=0.945,
+                            resampling_method='sinc_interp_kaiser',
+                            beta=14.769656459379492,
                         )
                         self.resampler_cache[(sr, samplerate)] = resampler
                     part_tensor = resampler(part_tensor)
