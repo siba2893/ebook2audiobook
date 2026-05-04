@@ -31,7 +31,7 @@ REM Uninstall packages that the regular / cosyvoice profiles install, plus
 REM the torch trio (we'll reinstall cu128 below).  qwen-tts will pull the
 REM transformers/accelerate versions it needs in step 3.
 "%PY%" -m pip uninstall -y torch torchaudio torchvision torchcodec ^
-    transformers accelerate ^
+    transformers accelerate faster-qwen3-tts ^
     coqui-tts fish_speech pyannote-audio gruut demucs torchvggish ^
     conformer diffusers hyperpyyaml hydra-core onnxruntime onnxruntime-gpu ^
     deepspeed ormsgpack descript-audio-codec einops 2>nul

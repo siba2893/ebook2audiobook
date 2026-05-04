@@ -13,10 +13,21 @@ at the repo root, written by one of the install scripts:
                                          (CosyVoice 3 only)
   - `3_qwen3tts_engine_install.cmd`   →  .engine-mode = "qwen3tts"
                                          (Qwen3-TTS only)
+  - `4_f5tts_engine_install.cmd`      →  .engine-mode = "f5tts"
+                                         (F5-TTS — English/Chinese via
+                                          F5TTS_v1_Base; Spanish via
+                                          jpgallegoar/F5-Spanish fine-tune)
+  - `5_qwen_fast_install.cmd`         →  .engine-mode = "qwen_fast"
+                                         (Qwen3-TTS routed through
+                                          faster-qwen3-tts CUDA-graph fork;
+                                          same dropdown entry as qwen3tts,
+                                          backend auto-selected by the engine
+                                          class)
 
-The "regular", "cosyvoice", and "qwen3tts" installs use mutually-incompatible
-PyTorch/package sets, so the dropdown only shows the engines the current install
-actually supports.  No marker → defaults to "regular".
+The "regular", "cosyvoice", "qwen3tts", "f5tts", and "qwen_fast" installs use
+mutually-incompatible PyTorch/package sets, so the dropdown only shows the
+engines the current install actually supports.  No marker → defaults to
+"regular".
 """
 import os
 
@@ -38,12 +49,14 @@ _LABELS = {
     "fishspeech": "Fish Speech 1.5",
     "cosyvoice":  "CosyVoice 3",
     "qwen3tts":   "Qwen3-TTS",
+    "f5tts":      "F5-TTS",
 }
 
 _REGULAR = ["xtts", "bark", "tortoise", "vits", "fairseq",
             "glowtts", "tacotron", "yourtts", "fishspeech"]
 _COSYVOICE_ONLY = ["cosyvoice"]
 _QWEN3TTS_ONLY = ["qwen3tts"]
+_F5TTS_ONLY = ["f5tts"]
 
 
 def _read_mode() -> str:
@@ -61,8 +74,14 @@ def list_engines():
     mode = _read_mode()
     if mode == "cosyvoice":
         keys = _COSYVOICE_ONLY
-    elif mode == "qwen3tts":
+    elif mode in ("qwen3tts", "qwen_fast"):
+        # qwen_fast routes the same Qwen3-TTS engine through the
+        # faster-qwen3-tts CUDA-graph fork — the engine class auto-detects
+        # the backend from .engine-mode, so the dropdown surfaces the same
+        # qwen3tts entry under both profiles.
         keys = _QWEN3TTS_ONLY
+    elif mode == "f5tts":
+        keys = _F5TTS_ONLY
     else:
         keys = _REGULAR
     return {

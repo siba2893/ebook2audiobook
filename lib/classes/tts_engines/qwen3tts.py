@@ -38,10 +38,42 @@ _NARRATION_GEN_DEFAULTS = {
 }
 _NARRATION_SEED_DEFAULT = 0
 
-# Default backend.  Override per-session via session['qwen3tts_backend'].
-# Phase 3 of qwen3-fast-integration-plan.md adds 'faster-qwen-tts' as an
-# opt-in second value.
+# Backend selection.  In priority order: explicit session override
+# (`session['qwen3tts_backend']`, mainly for tests), then auto-detect from
+# `.engine-mode` at the repo root (`qwen_fast` profile → fast backend),
+# then fall back to the upstream qwen-tts package.
 _DEFAULT_BACKEND = 'qwen-tts'
+_FAST_BACKEND = 'faster-qwen-tts'
+
+# .engine-mode marker → backend name.  Add new modes here as install
+# profiles are added.
+_ENGINE_MODE_TO_BACKEND = {
+    'qwen_fast': _FAST_BACKEND,
+    # 'qwen3tts' (the default profile) and any unknown value resolve to
+    # the upstream qwen-tts backend below.
+}
+
+# qwen3tts.py lives at lib/classes/tts_engines/qwen3tts.py — four
+# dirnames up is the repo root where .engine-mode is written.
+_REPO_ROOT = os.path.normpath(os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', '..', '..',
+))
+
+
+def _backend_from_engine_mode() -> str:
+    """Pick the default backend from the .engine-mode marker.
+
+    Mirrors webui/backend/routers/engines.py:_read_mode().  Returning the
+    upstream backend on missing/unreadable file keeps non-qwen3tts
+    profiles working unchanged.
+    """
+    marker = os.path.join(_REPO_ROOT, '.engine-mode')
+    try:
+        with open(marker, 'r', encoding='utf-8') as f:
+            mode = f.read().strip().lower()
+    except (FileNotFoundError, OSError):
+        return _DEFAULT_BACKEND
+    return _ENGINE_MODE_TO_BACKEND.get(mode, _DEFAULT_BACKEND)
 
 # ISO 639-3 → Qwen3-TTS language string mapping.
 _LANG_MAP = {
@@ -144,12 +176,80 @@ class _QwenTtsBackend(_Backend):
         )
 
 
+class _FasterQwenTtsBackend(_Backend):
+    """CUDA-graph-optimized backend via the `faster-qwen3-tts` PyPI fork.
+
+    Active when the `qwen_fast` install profile is selected
+    (.engine-mode == 'qwen_fast').  The fork keeps the same prompt-handle
+    contract (engine.model.create_voice_clone_prompt) and return type
+    (Tuple[List[np.ndarray], int]) as upstream `qwen-tts`, so the
+    wrapping Qwen3TTS class needs no changes beyond backend dispatch.
+
+    Two API divergences vs upstream:
+      - load takes `device` (string), not `device_map`; we translate.
+        It also takes `max_seq_len` for CUDA-graph buffer pre-allocation.
+      - generate_voice_clone does NOT accept `subtalker_*` kwargs and
+        has no **kwargs passthrough.  We strip those from gen_kwargs
+        here so the wrapping class can stay backend-agnostic.
+    """
+    name = _FAST_BACKEND
+
+    def load(self, repo, dtype, device_map, attn_impl, **opts):
+        try:
+            from faster_qwen3_tts import FasterQwen3TTS
+        except ImportError as e:
+            raise RuntimeError(
+                f'faster-qwen3-tts is not installed but the qwen_fast install '
+                f'profile is selected.  Run 5_qwen_fast_install.cmd, or revert '
+                f'to 3_qwen3tts_engine_install.cmd for the upstream backend.\n'
+                f'Original error: {e}'
+            ) from e
+        # device_map='cuda:0' / 'cpu' -> device='cuda' / 'cpu'.  The fork
+        # only supports a single CUDA device; the index is ignored.
+        device = 'cuda' if device_map.startswith('cuda') else device_map
+        max_seq_len = int(opts.get('max_seq_len') or 2048)
+        return FasterQwen3TTS.from_pretrained(
+            repo,
+            device=device,
+            dtype=dtype,
+            attn_implementation=attn_impl,
+            max_seq_len=max_seq_len,
+        )
+
+    def build_prompt(self, engine, voice_path, ref_text):
+        # Fork exposes the original Qwen3TTSModel under .model; use it so
+        # the prompt handle stays compatible with our cache contract.
+        return engine.model.create_voice_clone_prompt(
+            ref_audio=voice_path,
+            ref_text=ref_text,
+            x_vector_only_mode=not bool(ref_text),
+        )
+
+    def generate(self, engine, text, language, prompt, gen_kwargs):
+        # Strip sub-talker kwargs the fork can't accept.  Talker-level
+        # narration tuning (temperature, top_p, top_k, repetition_penalty)
+        # still flows through unchanged — that's the dominant drift control.
+        filtered = {
+            k: v for k, v in gen_kwargs.items()
+            if not k.startswith('subtalker_')
+        }
+        filtered.setdefault('do_sample', True)
+        return engine.generate_voice_clone(
+            text=text,
+            language=language,
+            voice_clone_prompt=prompt,
+            **filtered,
+        )
+
+
 def _resolve_backend(name: str) -> _Backend:
-    if name == 'qwen-tts':
+    if name == _DEFAULT_BACKEND:
         return _QwenTtsBackend()
+    if name == _FAST_BACKEND:
+        return _FasterQwenTtsBackend()
     raise ValueError(
         f"Unknown qwen3tts_backend {name!r}. "
-        f"Supported: 'qwen-tts'.  (Phase 3 will add 'faster-qwen-tts'.)"
+        f"Supported: {_DEFAULT_BACKEND!r}, {_FAST_BACKEND!r}."
     )
 
 
@@ -181,7 +281,8 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
             self._voice_prompt_cache = {}
             self._gen_kwargs = self._resolve_gen_kwargs()
             self._seed = int(self.session.get('qwen3tts_seed', _NARRATION_SEED_DEFAULT) or 0)
-            backend_name = (self.session.get('qwen3tts_backend') or _DEFAULT_BACKEND).strip()
+            backend_override = (self.session.get('qwen3tts_backend') or '').strip()
+            backend_name = backend_override or _backend_from_engine_mode()
             self._backend = _resolve_backend(backend_name)
             self.engine = self.load_engine()
         except Exception as e:
@@ -232,6 +333,7 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                 dtype=dtype,
                 device_map=device_map,
                 attn_impl=attn_impl,
+                max_seq_len=int(self.session.get('qwen3tts_max_seq_len', 2048) or 2048),
             )
 
             loaded_tts[self.tts_key] = engine
