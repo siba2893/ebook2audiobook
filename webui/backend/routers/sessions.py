@@ -307,6 +307,7 @@ async def create_test_run_session():
         "ebook_src": sample_path,
         "filename": "sample.epub",
         "filename_noext": "sample",
+        "is_test_run": True,
         "status": None,
         "blocks_current_json": None,
         "process_dir": None,
@@ -345,8 +346,11 @@ async def delete_session(session_id: str):
             except Exception as e:
                 print(f"[sessions] delete_session: could not remove {d}: {e}")
 
-    # Delete the uploaded ebook file and its parent upload dir if it only contained that file
-    if ebook_src and os.path.isfile(ebook_src):
+    # Delete the uploaded ebook file and its parent upload dir if it only contained that file.
+    # Never delete files inside assets/ — those are bundled repo files, not user uploads.
+    _assets_dir = os.path.normpath(os.path.join(_ROOT, "assets"))
+    ebook_is_asset = ebook_src and os.path.normpath(ebook_src).startswith(_assets_dir)
+    if ebook_src and os.path.isfile(ebook_src) and not ebook_is_asset:
         upload_dir = os.path.dirname(ebook_src)
         try:
             os.remove(ebook_src)
@@ -408,6 +412,25 @@ class StartRequest(BaseModel):
     fishspeech_max_new_tokens: int = 1024
     cosyvoice_speed: float = 1.0
     cosyvoice_instruct_text: str = ""
+    # Qwen3-TTS — see preview.py PreviewRequest for the same fields.  Defaults
+    # are the tuned-for-narration values from qwen3tts.py.
+    qwen3tts_ref_text: str = ""
+    qwen3tts_temperature: float = 0.7
+    qwen3tts_top_p: float = 0.9
+    qwen3tts_top_k: int = 50
+    qwen3tts_repetition_penalty: float = 1.1
+    qwen3tts_subtalker_temperature: float = 0.7
+    qwen3tts_subtalker_top_p: float = 0.9
+    qwen3tts_subtalker_top_k: int = 50
+    qwen3tts_seed: int = 0
+    qwen3tts_speed: float = 1.0
+    qwen3tts_silence_min: float = 0.3
+    qwen3tts_silence_max: float = 0.6
+    # F5-TTS — reference voice transcript.  See preview.py PreviewRequest.
+    f5tts_ref_text: str = ""
+    f5tts_speed: float = 0.85
+    f5tts_nfe_step: int = 32
+    f5tts_cfg_strength: float = 2.0
 
 
 def _build_args(session_id: str, req: "StartRequest", lang_pt3: str, lang_pt1: str, blocks_preview: bool) -> dict[str, Any]:
@@ -434,6 +457,7 @@ def _build_args(session_id: str, req: "StartRequest", lang_pt3: str, lang_pt1: s
         "is_gui_process": False,
         "script_mode": "native",
         "blocks_preview": blocks_preview,
+        "auto_resume": "y",
         "output_format": req.output_format,
         "output_dir": output_dir,
         "output_channel": default_output_channel,
@@ -457,6 +481,24 @@ def _build_args(session_id: str, req: "StartRequest", lang_pt3: str, lang_pt1: s
         # CosyVoice
         "cosyvoice_speed": req.cosyvoice_speed,
         "cosyvoice_instruct_text": req.cosyvoice_instruct_text,
+        # Qwen3-TTS
+        "qwen3tts_ref_text": req.qwen3tts_ref_text,
+        "qwen3tts_temperature": req.qwen3tts_temperature,
+        "qwen3tts_top_p": req.qwen3tts_top_p,
+        "qwen3tts_top_k": req.qwen3tts_top_k,
+        "qwen3tts_repetition_penalty": req.qwen3tts_repetition_penalty,
+        "qwen3tts_subtalker_temperature": req.qwen3tts_subtalker_temperature,
+        "qwen3tts_subtalker_top_p": req.qwen3tts_subtalker_top_p,
+        "qwen3tts_subtalker_top_k": req.qwen3tts_subtalker_top_k,
+        "qwen3tts_seed": req.qwen3tts_seed,
+        "qwen3tts_speed": req.qwen3tts_speed,
+        "qwen3tts_silence_min": req.qwen3tts_silence_min,
+        "qwen3tts_silence_max": req.qwen3tts_silence_max,
+        # F5-TTS
+        "f5tts_ref_text": req.f5tts_ref_text,
+        "f5tts_speed": req.f5tts_speed,
+        "f5tts_nfe_step": req.f5tts_nfe_step,
+        "f5tts_cfg_strength": req.f5tts_cfg_strength,
         "ebook_list": None,
         "ebook_textarea": None,
         "custom_model": None,
@@ -485,20 +527,23 @@ def _run_conversion(session_id: str, req: StartRequest):
         error, _ok = convert_ebook(args)
     # Persist metadata so audiobook path and final status survive restarts
     _save_meta(session_id)
-    if error:
-        q = _event_queues.get(session_id)
-        if q:
-            try:
+    q = _event_queues.get(session_id)
+    if q:
+        # Distinguish a clean cancellation from a real failure.  convert_ebook
+        # returns error='Conversion Cancelled' for both — disambiguate via the
+        # in-memory cancellation_requested flag so the UI can show the
+        # correct affordance (resume button vs error message).
+        session = _ctx().get_session(session_id) or {}
+        was_cancelled = bool(session.get("cancellation_requested"))
+        try:
+            if was_cancelled:
+                q.put_nowait({"type": "status", "status": "cancelled"})
+            elif error:
                 q.put_nowait({"type": "status", "status": "error", "error": str(error)})
-            except asyncio.QueueFull:
-                pass
-    else:
-        q = _event_queues.get(session_id)
-        if q:
-            try:
+            else:
                 q.put_nowait({"type": "status", "status": "done"})
-            except asyncio.QueueFull:
-                pass
+        except asyncio.QueueFull:
+            pass
 
 
 @router.post("/sessions/{session_id}/start", status_code=202)
@@ -512,6 +557,8 @@ async def start_conversion(session_id: str, req: StartRequest, background_tasks:
     # Apply XTTS settings to session before conversion
     session["xtts_speed"] = req.xtts_speed
     session["xtts_temperature"] = req.xtts_temperature
+    session["status"] = status_tags.get("CONVERTING")
+    session["cancellation_requested"] = False
 
     loop = asyncio.get_event_loop()
     background_tasks.add_task(

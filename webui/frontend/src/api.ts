@@ -23,9 +23,17 @@ export interface UploadResponse {
   filename: string;
 }
 
+export type ConversionStatus =
+  | "ready"
+  | "edit"
+  | "converting"
+  | "done"
+  | "error"
+  | "cancelled";
+
 export interface SessionStatus {
   session_id: string;
-  status: string; // ready | converting | done | error | cancelled
+  status: ConversionStatus;
   block_resume: number;
   blocks_total: number;
   sentence_resume: number;
@@ -121,6 +129,21 @@ export interface ConversionSettings {
   cosyvoice_speed: number;
   cosyvoice_instruct_text: string;
   qwen3tts_ref_text: string;
+  qwen3tts_temperature: number;
+  qwen3tts_top_p: number;
+  qwen3tts_top_k: number;
+  qwen3tts_repetition_penalty: number;
+  qwen3tts_subtalker_temperature: number;
+  qwen3tts_subtalker_top_p: number;
+  qwen3tts_subtalker_top_k: number;
+  qwen3tts_seed: number;
+  qwen3tts_speed: number;
+  qwen3tts_silence_min: number;
+  qwen3tts_silence_max: number;
+  f5tts_ref_text: string;
+  f5tts_speed: number;
+  f5tts_nfe_step: number;
+  f5tts_cfg_strength: number;
 }
 
 export async function startConversion(
@@ -152,7 +175,7 @@ export async function parseEbook(
 export type SseEvent =
   | { type: "alert"; alert_type: string; msg: string }
   | { type: "stdout"; msg: string }
-  | { type: "status"; status: string }
+  | { type: "status"; status: ConversionStatus }
   | { type: "parse_done"; ok: boolean; error?: string }
   | { type: "ping" };
 
@@ -192,6 +215,23 @@ export async function uploadVoice(file: File): Promise<Voice> {
 
 export async function deleteVoice(name: string): Promise<void> {
   await fetch(`${API}/api/voices/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Health
+// ---------------------------------------------------------------------------
+
+export interface HealthStatus {
+  torch: boolean;
+  cuda: boolean;
+  vram_free_gb: number;
+  vram_total_gb: number;
+  faster_whisper: boolean;
+  engine_mode: string;
+}
+
+export async function fetchHealth(): Promise<HealthStatus> {
+  return json(await fetch(`${API}/api/health`));
 }
 
 export async function fetchVoiceTranscript(name: string): Promise<string> {
@@ -283,6 +323,21 @@ export interface PreviewRequest {
   cosyvoice_speed: number;
   cosyvoice_instruct_text: string;
   qwen3tts_ref_text: string;
+  qwen3tts_temperature: number;
+  qwen3tts_top_p: number;
+  qwen3tts_top_k: number;
+  qwen3tts_repetition_penalty: number;
+  qwen3tts_subtalker_temperature: number;
+  qwen3tts_subtalker_top_p: number;
+  qwen3tts_subtalker_top_k: number;
+  qwen3tts_seed: number;
+  qwen3tts_speed: number;
+  qwen3tts_silence_min: number;
+  qwen3tts_silence_max: number;
+  f5tts_ref_text: string;
+  f5tts_speed: number;
+  f5tts_nfe_step: number;
+  f5tts_cfg_strength: number;
 }
 
 /**

@@ -39,6 +39,30 @@ class PreviewRequest(BaseModel):
     # to x_vector_only_mode (which upstream documents as lower quality).
     # Empty string = let the engine auto-transcribe via faster-whisper.
     qwen3tts_ref_text: str = ""
+    # Qwen3-TTS sampling controls.  Defaults match the tuned narration
+    # presets in lib/classes/tts_engines/qwen3tts.py: lower temperature than
+    # the upstream package default (0.9) for stable timbre across an
+    # audiobook, plus a small repetition penalty bump.
+    qwen3tts_temperature: float = 0.7
+    qwen3tts_top_p: float = 0.9
+    qwen3tts_top_k: int = 50
+    qwen3tts_repetition_penalty: float = 1.1
+    qwen3tts_subtalker_temperature: float = 0.7
+    qwen3tts_subtalker_top_p: float = 0.9
+    qwen3tts_subtalker_top_k: int = 50
+    qwen3tts_seed: int = 0
+    qwen3tts_speed: float = 1.0
+    qwen3tts_silence_min: float = 0.3
+    qwen3tts_silence_max: float = 0.6
+    # F5-TTS — reference voice transcript.  Required for F5-TTS to clone:
+    # empty string lets the engine auto-transcribe via faster-whisper.
+    f5tts_ref_text: str = ""
+    # F5-TTS sampling levers.  Default speed 0.85 (vs upstream 1.0) because
+    # F5-TTS calibrates pacing to the auto-trimmed reference clip and 1.0
+    # sounds rushed for narration.  See lib/classes/tts_engines/f5tts.py.
+    f5tts_speed: float = 0.85
+    f5tts_nfe_step: int = 32
+    f5tts_cfg_strength: float = 2.0
 
 
 @router.post("/preview")
@@ -128,6 +152,22 @@ def _synthesize(req: PreviewRequest, text: str) -> str:
         "cosyvoice_instruct_text": req.cosyvoice_instruct_text,
         # Qwen3-TTS-specific
         "qwen3tts_ref_text": req.qwen3tts_ref_text,
+        "qwen3tts_temperature": req.qwen3tts_temperature,
+        "qwen3tts_top_p": req.qwen3tts_top_p,
+        "qwen3tts_top_k": req.qwen3tts_top_k,
+        "qwen3tts_repetition_penalty": req.qwen3tts_repetition_penalty,
+        "qwen3tts_subtalker_temperature": req.qwen3tts_subtalker_temperature,
+        "qwen3tts_subtalker_top_p": req.qwen3tts_subtalker_top_p,
+        "qwen3tts_subtalker_top_k": req.qwen3tts_subtalker_top_k,
+        "qwen3tts_seed": req.qwen3tts_seed,
+        "qwen3tts_speed": req.qwen3tts_speed,
+        "qwen3tts_silence_min": req.qwen3tts_silence_min,
+        "qwen3tts_silence_max": req.qwen3tts_silence_max,
+        # F5-TTS-specific
+        "f5tts_ref_text": req.f5tts_ref_text,
+        "f5tts_speed": req.f5tts_speed,
+        "f5tts_nfe_step": req.f5tts_nfe_step,
+        "f5tts_cfg_strength": req.f5tts_cfg_strength,
     }
 
     # Wrap in a DictProxy-compatible shim so engine code can use [] and .get()

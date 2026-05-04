@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { ConversionSettings, Voice, fetchVoiceTranscript, transcribeVoice } from "../api";
+import { ConversionSettings, Voice, fetchVoiceTranscript, listVoices, transcribeVoice } from "../api";
+import { LANGUAGES, languageLabel } from "../languages";
+import { loadSettings, saveSettings } from "../settings";
 import VoiceBrowser from "./VoiceBrowser";
 import VoicePreview from "./VoicePreview";
 
@@ -12,42 +14,18 @@ interface Props {
   sessionId: string;
   filename: string | null;
   isTestRun?: boolean;
+  language: string;
+  onLanguageChange: (code: string) => void;
   onNext: (settings: ConversionSettings) => void;
 }
 
-const DEFAULTS: ConversionSettings = {
-  language: "spa",
-  voice_path: null,
-  tts_engine: "xtts",
-  device: "cuda",
-  output_format: "m4b",
-  xtts_speed: 1.0,
-  xtts_temperature: 0.85,
-  fishspeech_temperature: 0.8,
-  fishspeech_top_p: 0.8,
-  fishspeech_repetition_penalty: 1.1,
-  fishspeech_max_new_tokens: 1024,
-  cosyvoice_speed: 1.0,
-  cosyvoice_instruct_text: "",
-  qwen3tts_ref_text: "",
-};
-
-function loadSettings(): ConversionSettings {
-  try {
-    const raw = localStorage.getItem("ebook2audiobook:settings");
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
-  } catch { /* ignore */ }
-  return DEFAULTS;
-}
-
-function saveSettings(s: ConversionSettings) {
-  localStorage.setItem("ebook2audiobook:settings", JSON.stringify(s));
-}
-
-export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }: Props) {
-  const [settings, setSettings] = useState<ConversionSettings>(loadSettings());
+export default function ConfigureCard({ sessionId, filename, isTestRun, language, onLanguageChange, onNext }: Props) {
+  const [settings, setSettings] = useState<ConversionSettings>(() => ({
+    ...loadSettings(),
+    language,
+  }));
   const [engines, setEngines] = useState<EngineOption[]>([]);
-  const [selectedVoiceName, setSelectedVoiceName] = useState<string | null>(null);
+  const [selectedVoice, setSelectedVoice] = useState<Voice | null>(null);
   const [transcribing, setTranscribing] = useState(false);
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
 
@@ -72,12 +50,32 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
   // When the selected voice or engine changes, load the cached transcript sidecar
   // (<voice>.transcript.txt) into the qwen3tts_ref_text field.
   useEffect(() => {
-    if (!selectedVoiceName || settings.tts_engine !== "qwen3tts") return;
-    fetchVoiceTranscript(selectedVoiceName).then((t) => {
+    if (!selectedVoice || settings.tts_engine !== "qwen3tts") return;
+    fetchVoiceTranscript(selectedVoice.name).then((t) => {
       setSettings((s) => ({ ...s, qwen3tts_ref_text: t }));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVoiceName, settings.tts_engine]);
+  }, [selectedVoice, settings.tts_engine]);
+
+  // Same sidecar lookup for F5-TTS (which also requires ref_text).
+  useEffect(() => {
+    if (!selectedVoice || settings.tts_engine !== "f5tts") return;
+    fetchVoiceTranscript(selectedVoice.name).then((t) => {
+      setSettings((s) => ({ ...s, f5tts_ref_text: t }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVoice, settings.tts_engine]);
+
+  // Resolve a localStorage-restored voice_path into the full Voice object so
+  // the "selected voice" card and transcript loader work after a page reload.
+  useEffect(() => {
+    if (!settings.voice_path || selectedVoice) return;
+    listVoices().then((voices) => {
+      const match = voices.find((v) => v.path === settings.voice_path);
+      if (match) setSelectedVoice(match);
+    }).catch(() => { /* ignore */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function set<K extends keyof ConversionSettings>(key: K, value: ConversionSettings[K]) {
     setSettings((s) => ({ ...s, [key]: value }));
@@ -113,9 +111,10 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
 
       <VoiceBrowser
         selected={settings.voice_path}
+        language={language}
         onSelect={(v: Voice | null) => {
           set("voice_path", v?.path ?? null);
-          setSelectedVoiceName(v?.name ?? null);
+          setSelectedVoice(v);
         }}
       />
 
@@ -127,12 +126,20 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="label">language</label>
-            <input
+            <select
               className="input"
               value={settings.language}
-              onChange={(e) => set("language", e.target.value)}
-              placeholder="spa, eng, fra…"
-            />
+              onChange={(e) => {
+                set("language", e.target.value);
+                onLanguageChange(e.target.value);
+              }}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {languageLabel(l.code)}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -299,13 +306,13 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
               <div className="mt-2 flex items-center gap-3">
                 <button
                   className="btn-ghost flex items-center gap-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
-                  disabled={transcribing || !selectedVoiceName}
+                  disabled={transcribing || !selectedVoice}
                   onClick={async () => {
-                    if (!selectedVoiceName) return;
+                    if (!selectedVoice) return;
                     setTranscribing(true);
                     setTranscribeError(null);
                     try {
-                      const t = await transcribeVoice(selectedVoiceName);
+                      const t = await transcribeVoice(selectedVoice.name);
                       set("qwen3tts_ref_text", t);
                     } catch (e: unknown) {
                       setTranscribeError(e instanceof Error ? e.message : "Transcription failed");
@@ -326,7 +333,7 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
                     </>
                   )}
                 </button>
-                {!selectedVoiceName && (
+                {!selectedVoice && (
                   <span className="text-xs text-zinc-500">select a voice first</span>
                 )}
                 {transcribeError && (
@@ -336,6 +343,302 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, onNext }
               <p className="mt-1 text-xs text-zinc-500">
                 Providing a transcript switches Qwen3-TTS to full-fidelity cloning mode (better timbre + accent). Empty = auto-transcribe with whisper.
               </p>
+
+              <div className="mt-3 surface-muted rounded p-3">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">selected voice</p>
+                {selectedVoice ? (
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="text-xs text-zinc-200 truncate flex-1"
+                      title={selectedVoice.path}
+                    >
+                      {selectedVoice.name}
+                    </span>
+                    <audio src={selectedVoice.url} controls preload="none" className="h-7 max-w-[220px]" />
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-400">
+                    No voice selected. Qwen3-TTS requires a reference WAV — pick or upload one above.
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-3">
+                <div>
+                  <label className="label">narration speed</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0.5}
+                    max={2.0}
+                    step={0.05}
+                    value={settings.qwen3tts_speed}
+                    onChange={(e) => set("qwen3tts_speed", Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="label">silence min (s)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    max={5}
+                    step={0.05}
+                    value={settings.qwen3tts_silence_min}
+                    onChange={(e) => set("qwen3tts_silence_min", Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="label">silence max (s)</label>
+                  <input
+                    className="input"
+                    type="number"
+                    min={0}
+                    max={5}
+                    step={0.05}
+                    value={settings.qwen3tts_silence_max}
+                    onChange={(e) => set("qwen3tts_silence_max", Number(e.target.value))}
+                  />
+                </div>
+                <p className="col-span-3 text-xs text-zinc-500">
+                  Speed &lt; 1.0 slows narration with pitch preserved (phase-vocoder time-stretch). Silence min/max set the random gap inserted after each punctuation-terminated sentence-part. Use <code>[pause:N]</code> in the source text for an exact N-second break at a specific spot.
+                </p>
+              </div>
+
+              <details className="mt-3">
+                <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-zinc-500 select-none">
+                  advanced sampling
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-3 surface-muted rounded p-3">
+                  <div>
+                    <label className="label">temperature</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0.1}
+                      max={1.5}
+                      step={0.05}
+                      value={settings.qwen3tts_temperature}
+                      onChange={(e) => set("qwen3tts_temperature", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">top_p</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0.1}
+                      max={1.0}
+                      step={0.05}
+                      value={settings.qwen3tts_top_p}
+                      onChange={(e) => set("qwen3tts_top_p", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">top_k</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={1}
+                      max={500}
+                      step={1}
+                      value={settings.qwen3tts_top_k}
+                      onChange={(e) => set("qwen3tts_top_k", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">repetition penalty</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={1.0}
+                      max={2.0}
+                      step={0.05}
+                      value={settings.qwen3tts_repetition_penalty}
+                      onChange={(e) => set("qwen3tts_repetition_penalty", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">subtalker temperature</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0.1}
+                      max={1.5}
+                      step={0.05}
+                      value={settings.qwen3tts_subtalker_temperature}
+                      onChange={(e) => set("qwen3tts_subtalker_temperature", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">subtalker top_p</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0.1}
+                      max={1.0}
+                      step={0.05}
+                      value={settings.qwen3tts_subtalker_top_p}
+                      onChange={(e) => set("qwen3tts_subtalker_top_p", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">subtalker top_k</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={1}
+                      max={500}
+                      step={1}
+                      value={settings.qwen3tts_subtalker_top_k}
+                      onChange={(e) => set("qwen3tts_subtalker_top_k", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">seed</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0}
+                      step={1}
+                      value={settings.qwen3tts_seed}
+                      onChange={(e) => set("qwen3tts_seed", Number(e.target.value))}
+                    />
+                  </div>
+                  <p className="col-span-2 text-xs text-zinc-500">
+                    Lower temperature → tighter timbre across sentences; higher → more expressive.
+                    Defaults (0.7 / 0.9 / 1.1 / 0.7) are tuned for narration.
+                    Settings auto-save to your browser and apply on next conversion.
+                  </p>
+                </div>
+              </details>
+            </div>
+          )}
+
+          {settings.tts_engine === "f5tts" && (
+            <div className="col-span-2 space-y-4">
+              <div>
+                <label className="label">speed</label>
+                <input
+                  className="input"
+                  type="number"
+                  min={0.3}
+                  max={2.0}
+                  step={0.05}
+                  value={settings.f5tts_speed}
+                  onChange={(e) => set("f5tts_speed", Number(e.target.value))}
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  0.85 = steady narration, 1.0 = upstream default (rushed for audiobooks).
+                </p>
+              </div>
+
+              <label className="label">
+                voice transcript <span className="text-zinc-500">(required)</span>
+              </label>
+              <textarea
+                className="input min-h-[80px]"
+                value={settings.f5tts_ref_text}
+                onChange={(e) => {
+                  set("f5tts_ref_text", e.target.value);
+                  setTranscribeError(null);
+                }}
+                placeholder="Transcript of the reference voice WAV. Leave blank to auto-transcribe with whisper on first use (cached as <voice>.transcript.txt next to the WAV)."
+              />
+              <div className="mt-2 flex items-center gap-3">
+                <button
+                  className="btn-ghost flex items-center gap-1.5 text-xs disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={transcribing || !selectedVoice}
+                  onClick={async () => {
+                    if (!selectedVoice) return;
+                    setTranscribing(true);
+                    setTranscribeError(null);
+                    try {
+                      const t = await transcribeVoice(selectedVoice.name);
+                      set("f5tts_ref_text", t);
+                    } catch (e: unknown) {
+                      setTranscribeError(e instanceof Error ? e.message : "Transcription failed");
+                    } finally {
+                      setTranscribing(false);
+                    }
+                  }}
+                >
+                  {transcribing ? (
+                    <>
+                      <TranscribeSpinner />
+                      transcribing…
+                    </>
+                  ) : (
+                    <>
+                      <MicIcon />
+                      transcribe voice
+                    </>
+                  )}
+                </button>
+                {!selectedVoice && (
+                  <span className="text-xs text-zinc-500">select a voice first</span>
+                )}
+                {transcribeError && (
+                  <span className="text-xs text-red-400 font-mono">{transcribeError}</span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                F5-TTS requires a transcript of the reference WAV. Native languages: English + Chinese. Empty = auto-transcribe with whisper on first run.
+              </p>
+
+              <div className="mt-3 surface-muted rounded p-3">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-2">selected voice</p>
+                {selectedVoice ? (
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="text-xs text-zinc-200 truncate flex-1"
+                      title={selectedVoice.path}
+                    >
+                      {selectedVoice.name}
+                    </span>
+                    <audio src={selectedVoice.url} controls preload="none" className="h-7 max-w-[220px]" />
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-400">
+                    No voice selected. F5-TTS requires a reference WAV — pick or upload one above.
+                  </p>
+                )}
+              </div>
+
+              <details className="mt-3">
+                <summary className="cursor-pointer text-[10px] uppercase tracking-widest text-zinc-500 select-none">
+                  advanced sampling
+                </summary>
+                <div className="mt-2 grid grid-cols-2 gap-3 surface-muted rounded p-3">
+                  <div>
+                    <label className="label">nfe step</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={4}
+                      max={64}
+                      step={1}
+                      value={settings.f5tts_nfe_step}
+                      onChange={(e) => set("f5tts_nfe_step", Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">cfg strength</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min={0.5}
+                      max={5.0}
+                      step={0.1}
+                      value={settings.f5tts_cfg_strength}
+                      onChange={(e) => set("f5tts_cfg_strength", Number(e.target.value))}
+                    />
+                  </div>
+                  <p className="col-span-2 text-xs text-zinc-500">
+                    nfe_step 32 = best WER (paper); 16 = ~2× faster, minor quality loss. cfg_strength 2.0 is the upstream default — higher over-emphasises the reference and can sound metallic.
+                  </p>
+                </div>
+              </details>
             </div>
           )}
         </div>
