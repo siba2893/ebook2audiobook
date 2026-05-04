@@ -38,13 +38,15 @@ _NARRATION_GEN_DEFAULTS = {
 }
 _NARRATION_SEED_DEFAULT = 0
 
-# Post-WAV tempo (librosa.effects.time_stretch) and per-part silence range.
-# Speed of 1.0 = native model speed (no time-stretch).  Below 1.0 slows
-# narration with pitch preserved via phase vocoder.  Silence is the gap
-# inserted in convert() after each punctuation-terminated sentence-part.
-_SPEED_DEFAULT = 1.0
-_SPEED_MIN = 0.5
-_SPEED_MAX = 2.0
+# Per-part silence range (seconds) inserted after every punctuation-
+# terminated part inside a sentence.  The range is uniform-random to keep
+# the prosody from sounding metronomic.  No speed knob here on purpose:
+# every pitch-preserving time-stretch we tested (librosa phase vocoder,
+# audiotsm WSOLA, pedalboard / Rubber Band) introduced audible "brr" /
+# small-room reverb artifacts on TTS speech at rate < 1.0, because the
+# transient consonants (plosives, fricatives) cannot be cleanly stretched
+# without smearing.  Real narrators slow pacing by extending silences,
+# not by drawling individual syllables — which is the lever we keep.
 _SILENCE_MIN_DEFAULT = 0.3
 _SILENCE_MAX_DEFAULT = 0.6
 
@@ -298,8 +300,6 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
             self._voice_prompt_cache = {}
             self._gen_kwargs = self._resolve_gen_kwargs()
             self._seed = int(self.session.get('qwen3tts_seed', _NARRATION_SEED_DEFAULT) or 0)
-            self._speed = max(_SPEED_MIN, min(_SPEED_MAX,
-                float(self.session.get('qwen3tts_speed', _SPEED_DEFAULT) or _SPEED_DEFAULT)))
             self._silence_min = max(0.0,
                 float(self.session.get('qwen3tts_silence_min', _SILENCE_MIN_DEFAULT) or _SILENCE_MIN_DEFAULT))
             self._silence_max = max(self._silence_min,
@@ -552,16 +552,6 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                 if not is_audio_data_valid(audio_np):
                     return False, 'Qwen3-TTS audio output is invalid'
 
-                # Optional pitch-preserving time-stretch.  rate < 1.0 → slower
-                # (output longer); rate > 1.0 → faster.  Skip the librosa import
-                # entirely when speed is exactly 1.0, keeping the hot path clean.
-                if abs(self._speed - 1.0) > 1e-3:
-                    import librosa
-                    orig_dtype = audio_np.dtype
-                    audio_np = librosa.effects.time_stretch(
-                        audio_np.astype('float32'), rate=self._speed,
-                    ).astype(orig_dtype)
-
                 audio_tensor = torch.from_numpy(audio_np).float()  # (samples,)
 
                 part_tensor = audio_tensor.unsqueeze(0)  # → (1, samples)
@@ -592,8 +582,10 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                 del part_tensor, audio_tensor, audio_np
 
                 # Insert a short silence break after punctuation-terminated parts.
-                # Range is configurable via session['qwen3tts_silence_{min,max}'];
-                # silence is independent of speed (speed only stretches speech).
+                # Range is configurable via session['qwen3tts_silence_{min,max}'].
+                # This is the lever for "slower-paced narration" — extending
+                # pauses gives an audiobook-cadence feel without the artifacts
+                # any time-stretch would introduce on TTS speech.
                 if not part[-1].isalnum() and part[-1] != '—':
                     if self._silence_max <= self._silence_min:
                         silence_time = self._silence_min

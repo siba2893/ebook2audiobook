@@ -137,7 +137,6 @@ export interface ConversionSettings {
   qwen3tts_subtalker_top_p: number;
   qwen3tts_subtalker_top_k: number;
   qwen3tts_seed: number;
-  qwen3tts_speed: number;
   qwen3tts_silence_min: number;
   qwen3tts_silence_max: number;
   f5tts_ref_text: string;
@@ -331,7 +330,6 @@ export interface PreviewRequest {
   qwen3tts_subtalker_top_p: number;
   qwen3tts_subtalker_top_k: number;
   qwen3tts_seed: number;
-  qwen3tts_speed: number;
   qwen3tts_silence_min: number;
   qwen3tts_silence_max: number;
   f5tts_ref_text: string;

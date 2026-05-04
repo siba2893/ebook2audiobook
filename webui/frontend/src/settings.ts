@@ -26,7 +26,6 @@ export const DEFAULT_SETTINGS: ConversionSettings = {
   qwen3tts_subtalker_top_p: 0.9,
   qwen3tts_subtalker_top_k: 50,
   qwen3tts_seed: 0,
-  qwen3tts_speed: 1.0,
   qwen3tts_silence_min: 0.3,
   qwen3tts_silence_max: 0.6,
   f5tts_ref_text: "",

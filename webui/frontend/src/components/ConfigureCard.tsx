@@ -363,19 +363,7 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, language
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-3">
-                <div>
-                  <label className="label">narration speed</label>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0.5}
-                    max={2.0}
-                    step={0.05}
-                    value={settings.qwen3tts_speed}
-                    onChange={(e) => set("qwen3tts_speed", Number(e.target.value))}
-                  />
-                </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">silence min (s)</label>
                   <input
@@ -400,8 +388,8 @@ export default function ConfigureCard({ sessionId, filename, isTestRun, language
                     onChange={(e) => set("qwen3tts_silence_max", Number(e.target.value))}
                   />
                 </div>
-                <p className="col-span-3 text-xs text-zinc-500">
-                  Speed &lt; 1.0 slows narration with pitch preserved (phase-vocoder time-stretch). Silence min/max set the random gap inserted after each punctuation-terminated sentence-part. Use <code>[pause:N]</code> in the source text for an exact N-second break at a specific spot.
+                <p className="col-span-2 text-xs text-zinc-500">
+                  Random gap inserted after each punctuation-terminated sentence-part. Bump these up (e.g. 0.8 / 1.2) for a patient audiobook cadence. Use <code>[pause:N]</code> in the source text for an exact N-second break at a specific spot. Per-syllable speed control was tried and removed — every pitch-preserving time-stretch we tested introduced audible artifacts on TTS speech.
                 </p>
               </div>
 

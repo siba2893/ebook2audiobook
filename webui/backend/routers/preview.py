@@ -51,7 +51,6 @@ class PreviewRequest(BaseModel):
     qwen3tts_subtalker_top_p: float = 0.9
     qwen3tts_subtalker_top_k: int = 50
     qwen3tts_seed: int = 0
-    qwen3tts_speed: float = 1.0
     qwen3tts_silence_min: float = 0.3
     qwen3tts_silence_max: float = 0.6
     # F5-TTS — reference voice transcript.  Required for F5-TTS to clone:
@@ -160,7 +159,6 @@ def _synthesize(req: PreviewRequest, text: str) -> str:
         "qwen3tts_subtalker_top_p": req.qwen3tts_subtalker_top_p,
         "qwen3tts_subtalker_top_k": req.qwen3tts_subtalker_top_k,
         "qwen3tts_seed": req.qwen3tts_seed,
-        "qwen3tts_speed": req.qwen3tts_speed,
         "qwen3tts_silence_min": req.qwen3tts_silence_min,
         "qwen3tts_silence_max": req.qwen3tts_silence_max,
         # F5-TTS-specific
