@@ -9,9 +9,10 @@ will reintroduce a bug or regression we've already paid for.
 ## Project at a glance
 
 - Converts ebooks (epub/pdf/azw3/mobi/...) to audiobooks via local TTS.
-- 10 TTS engines: `xtts`, `bark`, `tortoise`, `vits`, `fairseq`, `glowtts`,
-  `tacotron`, `yourtts`, `fishspeech`, `cosyvoice`, `qwen3tts` (the user only
-  cares about XTTSv2 in production; the other engines exist for completeness).
+- 11 TTS engines: `xtts`, `bark`, `tortoise`, `vits`, `fairseq`, `glowtts`,
+  `tacotron`, `yourtts`, `fishspeech`, `cosyvoice`, `qwen3tts`, `f5tts` (the
+  user only cares about XTTSv2 in production; the other engines exist for
+  completeness).
 - React (Vite) + FastAPI WebUI under `webui/`. Backend is a thin shim around
   `lib.core.convert_chapters2audio()`.
 - Target hardware: Windows 11 + RTX 4060 (8 GB VRAM, CUDA 12.8, cc 8.9). Most
@@ -44,26 +45,30 @@ will reintroduce a bug or regression we've already paid for.
 
 ---
 
-## Three install profiles (mutually exclusive)
+## Five install profiles (mutually exclusive)
 
-The 10 engines split across three Python environments because their torch
-versions don't coexist. The active profile is recorded in a `.engine-mode`
-marker file at the repo root and read by `routers/engines.py`.
+The 11 engines split across five Python environments because their torch
+versions and `transformers` pins don't coexist. The active profile is
+recorded in a `.engine-mode` marker file at the repo root and read by
+`routers/engines.py`.
 
 | Profile | Marker | torch | Engines |
 |---|---|---|---|
 | **regular** | `regular` | 2.7.1+cu128 | xtts, bark, tortoise, vits, fairseq, glowtts, tacotron, yourtts, fishspeech (9) |
 | **cosyvoice** | `cosyvoice` | 2.3.1+cu121 | cosyvoice (1) |
 | **qwen3tts** | `qwen3tts` | 2.7.1+cu128 | qwen3tts (1, with `transformers` pinned by qwen-tts) |
+| **f5tts** | `f5tts` | 2.7.1+cu128 | f5tts (1, with f5-tts pulling its own unpinned `transformers` + bloat — gradio/wandb/datasets/bitsandbytes — kept isolated to this profile) |
+| **qwen_fast** | `qwen_fast` | 2.7.1+cu128 | qwen3tts via `faster-qwen3-tts` CUDA-graph fork (~2.6× steady-state speedup vs `qwen3tts` profile on the same model weights). Engine class auto-detects the backend from `.engine-mode`; the WebUI dropdown still shows a single "Qwen3-TTS" entry. See `qwen3-fast-integration-plan.md`. |
 
 **Install flow:**
 1. `base_installation.cmd` — wipes/installs engine-agnostic base packages
    (no torch). Idempotent: skips work if everything is current. Pass `--force`
    to wipe and reinstall.
 2. Pick **one** of `1_regular_engines_install.cmd`,
-   `2_cosy_voice_engine_install.cmd`, `3_qwen3tts_engine_install.cmd`.
-   Each script uninstalls the *other profiles'* packages before installing
-   its own, so switching profiles is safe without re-running base.
+   `2_cosy_voice_engine_install.cmd`, `3_qwen3tts_engine_install.cmd`,
+   `4_f5tts_engine_install.cmd`, `5_qwen_fast_install.cmd`.  Each script
+   uninstalls the *other profiles'* packages before installing its own, so
+   switching profiles is safe without re-running base.
 3. The dropdown in the WebUI auto-filters to whatever the active marker says.
 
 **Rule:** never add a package to `requirements.txt` that's torch-version-
@@ -114,6 +119,17 @@ that does `from lib.classes.tts_engines.common.headers import *` gets them.
 | **qwen3tts** | Auto-transcribes reference voice with faster-whisper, caches to `<voice>.transcript.txt` sidecar | Provides `ref_text` for full-fidelity voice clone (upstream README: `x_vector_only_mode=True` "may reduce cloning quality"). User can override via WebUI textarea. |
 | **qwen3tts** | `create_voice_clone_prompt(...)` cached per `(voice_path, ref_text)` | Avoids per-sentence x-vector recompute and removes timbre drift. |
 | **qwen3tts** | flash-attn 2.7.4 wheel auto-installed | Upstream prints "flash-attn is not installed" warning and falls back to eager attention; the wheel is opt-in via `attn_implementation='flash_attention_2'` only when `import flash_attn` succeeds. ~2-3× speedup. |
+| **qwen_fast** | Backend auto-selected from `.engine-mode` (`qwen_fast` → `_FasterQwenTtsBackend`) | The Qwen3TTS engine class wraps both upstream `qwen-tts` and the `faster-qwen3-tts` fork via a thin `_Backend` abstraction. Session knob `qwen3tts_backend` overrides the auto-detect (used by `tools/bench_qwen3tts.py` to flip backends without reinstalling). |
+| **qwen_fast** | Forces `attn_implementation='sdpa'` regardless of flash-attn install | `transformers/integrations/flash_attention.py` does CPU/GPU sync ops (`.item()` inside `is_fa_with_varlen_kwargs` / `position_ids` checks) that are forbidden during CUDA-graph capture. The fork's lazy capture errors out the first time `generate_voice_clone` runs if FA2 is enabled. SDPA is the fork's documented default and graph-capture-safe. |
+| **qwen_fast** | `subtalker_*` sampling kwargs are ignored (talker-level kept) | The fork's `generate_voice_clone` doesn't accept `subtalker_temperature` / `subtalker_top_p` / `subtalker_top_k` and has no `**kwargs` passthrough. `_FasterQwenTtsBackend.generate` strips them before calling the fork. Talker-level drift control (the dominant timbre/prosody knob) is preserved unchanged. |
+| **qwen_fast** | `qwen3tts_max_seq_len` session knob (default 2048) sets the CUDA-graph buffer pre-allocation | On a tight-VRAM card (4060 8 GB), lower this if graph capture hits OOM. The fork pre-allocates fixed-size buffers per max_seq_len at load time. |
+| **f5tts** | Requires non-empty `ref_text` — no x_vector_only fallback | F5-TTS's `infer()` will run with empty ref_text but the cloned voice is unusable. Engine returns a clear error if `_resolve_ref_text()` produces empty string after sidecar lookup + faster-whisper fallback. |
+| **f5tts** | Auto-transcribes reference voice with faster-whisper, caches to `<voice>.transcript.txt` sidecar | Same pattern as qwen3tts — saves the transcript so future runs skip re-transcription. |
+| **f5tts** | Has its own profile despite sharing torch 2.7.1+cu128 with regular/qwen3tts | f5-tts pulls unpinned `transformers` (would conflict with regular's `transformers==4.57.6`) and bundles `gradio<6.11`, `wandb`, `datasets`, `bitsandbytes` — bloat we keep isolated. |
+| **f5tts** | Languages: English + Chinese via F5TTS_v1_Base; Spanish via `jpgallegoar/F5-Spanish` community fine-tune (auto-selected at load time) | The SWivid base was trained on Emilia ZH-EN only. Spanish needs the F5TTS_Base (v0) arch + Spanish vocab — passed explicitly via `ckpt_file`/`vocab_file`. Cache key includes language so switching language reloads the right checkpoint. |
+| **f5tts** | Pre-call faster-whisper auto-transcribe is replaced by upstream `preprocess_ref_audio_text()` | F5-TTS bundles whisper-large-v3-turbo (much more accurate than the `small` model used elsewhere) AND VAD-trims the audio to <12s with natural boundaries. Calling our own `small` left transcript errors that cascaded into phoneme misalignment + gibberish output. |
+| **f5tts** | Default `speed` lowered from 1.0 → 0.85 | F5-TTS calibrates pacing to the auto-trimmed reference clip. With our 11.9s clips the trim point lands on a fast segment and gen output sounds rushed at 1.0. 0.85 is steady, audiobook-paced. |
+| **f5tts** | `torchcodec` must NOT be installed in this profile | f5-tts pulls torchcodec as a transitive dep but the only Windows wheels available (0.7+) require torch >= 2.8. With our torch 2.7.1 the DLL fails to load with `Could not find module libtorchcodec_core7.dll`. The install script does not pin it, but if pip pulls it during a transformers upgrade you must `pip uninstall -y torchcodec`. F5-TTS itself doesn't import it; transformers' ASR pipeline falls back to soundfile. |
 
 ---
 
@@ -233,6 +249,12 @@ the post-mortem from 2026-04-30 (`12% of daily budget for one debug session`).
    model summarizing the page returns tokens, not a full mirror.
 7. **Pause and start a fresh session** when one engine is solved before
    debugging the next. Don't carry the full prior context into unrelated work.
+8. **Always use RTK (Rust Token Killer) for shell commands.** RTK is a
+   token-optimized CLI proxy that compresses dev-tool output by 60–90 % — git,
+   npm, cargo, etc.  A Claude Code hook auto-rewrites bare commands
+   (`git status` → `rtk git status`), so just run commands normally.  Direct
+   `rtk gain` / `rtk discover` / `rtk proxy` for meta usage.  Never bypass it
+   with `rtk proxy <cmd>` unless debugging the proxy itself.
 
 ---
 
@@ -247,6 +269,9 @@ the post-mortem from 2026-04-30 (`12% of daily budget for one debug session`).
 - **`flash-attn`** is not on PyPI for Windows. We pin a community wheel
   ([lldacing/flash-attention-windows-wheel](https://huggingface.co/lldacing/flash-attention-windows-wheel))
   for the qwen3tts profile (cp312 + cu128 + torch 2.7).
+- **F5-TTS weights are CC-BY-NC-4.0** (non-commercial only). Code is MIT.
+  Trained on Emilia ZH-EN, so non-EN/non-ZH languages produce degraded output
+  even though the model accepts them. Native sample rate is 24 kHz (Vocos).
 - **Microsoft Store Python** is incompatible with this project (sandboxed
   site-packages, brittle pip behavior). Use a real Python install or the
   conda `python_env/`.
