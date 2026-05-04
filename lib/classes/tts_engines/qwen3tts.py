@@ -38,6 +38,11 @@ _NARRATION_GEN_DEFAULTS = {
 }
 _NARRATION_SEED_DEFAULT = 0
 
+# Default backend.  Override per-session via session['qwen3tts_backend'].
+# Phase 3 of qwen3-fast-integration-plan.md adds 'faster-qwen-tts' as an
+# opt-in second value.
+_DEFAULT_BACKEND = 'qwen-tts'
+
 # ISO 639-3 → Qwen3-TTS language string mapping.
 _LANG_MAP = {
     'ara': 'Arabic',
@@ -80,6 +85,74 @@ def _get_whisper_model():
     return _WHISPER_MODEL
 
 
+# ---------------------------------------------------------------------------
+# Backend abstraction
+# ---------------------------------------------------------------------------
+# Every engine-specific call (load, build prompt, generate) is routed through
+# a Backend object so a second backend can be plugged in without touching the
+# Qwen3TTS class.  The wrapping class still owns the prompt cache, sampling
+# kwargs, seed reset, resampler cache, SML splitting, and silence insertion —
+# all backend-agnostic.  See qwen3-fast-integration-plan.md.
+
+class _Backend:
+    name: str = ''
+
+    def load(self, repo: str, dtype, device_map: str, attn_impl: str, **opts) -> Any:
+        raise NotImplementedError
+
+    def build_prompt(self, engine: Any, voice_path: str, ref_text: str) -> Any:
+        raise NotImplementedError
+
+    def generate(self, engine: Any, text: str, language: str, prompt: Any, gen_kwargs: dict):
+        raise NotImplementedError
+
+
+class _QwenTtsBackend(_Backend):
+    """Default backend — straight wrapper around the `qwen-tts` PyPI package."""
+    name = 'qwen-tts'
+
+    def load(self, repo, dtype, device_map, attn_impl, **opts):
+        try:
+            from qwen_tts import Qwen3TTSModel
+        except ImportError as e:
+            raise RuntimeError(
+                f'Qwen3-TTS Python package could not be imported. '
+                f'Install with:\n'
+                f'  pip install -U qwen-tts\n'
+                f'Original error: {e}'
+            ) from e
+        return Qwen3TTSModel.from_pretrained(
+            repo,
+            device_map=device_map,
+            dtype=dtype,
+            attn_implementation=attn_impl,
+        )
+
+    def build_prompt(self, engine, voice_path, ref_text):
+        return engine.create_voice_clone_prompt(
+            ref_audio=voice_path,
+            ref_text=ref_text,
+            x_vector_only_mode=not bool(ref_text),
+        )
+
+    def generate(self, engine, text, language, prompt, gen_kwargs):
+        return engine.generate_voice_clone(
+            text=text,
+            language=language,
+            voice_clone_prompt=prompt,
+            **gen_kwargs,
+        )
+
+
+def _resolve_backend(name: str) -> _Backend:
+    if name == 'qwen-tts':
+        return _QwenTtsBackend()
+    raise ValueError(
+        f"Unknown qwen3tts_backend {name!r}. "
+        f"Supported: 'qwen-tts'.  (Phase 3 will add 'faster-qwen-tts'.)"
+    )
+
+
 class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
 
     def __init__(self, session: DictProxy):
@@ -108,6 +181,8 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
             self._voice_prompt_cache = {}
             self._gen_kwargs = self._resolve_gen_kwargs()
             self._seed = int(self.session.get('qwen3tts_seed', _NARRATION_SEED_DEFAULT) or 0)
+            backend_name = (self.session.get('qwen3tts_backend') or _DEFAULT_BACKEND).strip()
+            self._backend = _resolve_backend(backend_name)
             self.engine = self.load_engine()
         except Exception as e:
             raise ValueError(f'Qwen3TTS.__init__() error: {e}') from e
@@ -119,18 +194,8 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                 print(f'TTS {self.tts_key} model already loaded, reusing cached engine.')
                 return engine
 
-            print(f'Loading TTS {self.tts_key} model, it takes a while, please be patient…')
+            print(f'Loading TTS {self.tts_key} model (backend={self._backend.name}), it takes a while, please be patient…')
             self.cleanup_memory()
-
-            try:
-                from qwen_tts import Qwen3TTSModel
-            except ImportError as e:
-                raise RuntimeError(
-                    f'Qwen3-TTS Python package could not be imported. '
-                    f'Install with:\n'
-                    f'  pip install -U qwen-tts\n'
-                    f'Original error: {e}'
-                ) from e
 
             import torch
 
@@ -162,11 +227,11 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
             except ImportError:
                 attn_impl = 'eager'
 
-            engine = Qwen3TTSModel.from_pretrained(
-                repo,
-                device_map=device_map,
+            engine = self._backend.load(
+                repo=repo,
                 dtype=dtype,
-                attn_implementation=attn_impl,
+                device_map=device_map,
+                attn_impl=attn_impl,
             )
 
             loaded_tts[self.tts_key] = engine
@@ -280,13 +345,9 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
         key = (voice_path, ref_text)
         if key in self._voice_prompt_cache:
             return self._voice_prompt_cache[key]
-        prompt = self.engine.create_voice_clone_prompt(
-            ref_audio=voice_path,
-            ref_text=ref_text,
-            # x_vector_only_mode=False (full mode) when we have a transcript;
-            # x_vector_only_mode=True when we don't (worse fidelity per upstream).
-            x_vector_only_mode=not bool(ref_text),
-        )
+        # x_vector_only_mode is decided inside the backend (off when ref_text
+        # is non-empty for full-fidelity ICL, on when empty as a fallback).
+        prompt = self._backend.build_prompt(self.engine, voice_path, ref_text)
         self._voice_prompt_cache[key] = prompt
         return prompt
 
@@ -350,11 +411,12 @@ class Qwen3TTS(TTSUtils, TTSRegistry, name='qwen3tts'):
                     continue
 
                 self._seed_torch()
-                wavs, sr = self.engine.generate_voice_clone(
-                    text=part,
-                    language=qwen_lang,
-                    voice_clone_prompt=voice_clone_prompt,
-                    **self._gen_kwargs,
+                wavs, sr = self._backend.generate(
+                    self.engine,
+                    part,
+                    qwen_lang,
+                    voice_clone_prompt,
+                    self._gen_kwargs,
                 )
 
                 if not wavs or len(wavs) == 0:
