@@ -9,3 +9,4 @@ from .yourtts import YourTTS
 from .fishspeech import FishSpeech
 from .cosyvoice import CosyVoice
 from .qwen3tts import Qwen3TTS
+from .f5tts import F5TTS

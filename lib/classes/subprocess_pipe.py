@@ -31,9 +31,17 @@ class SubprocessPipe:
         if self.progress_bar:
             self.progress_bar(1.0, desc=msg)
 
-    def _on_error(self, err:Exception)->None:
+    def _on_error(self, err)->None:
         error = f"{self.msg} failed! {err}"
         print(error)
+        # Echo the last few lines of the subprocess's stderr so the failure
+        # is diagnosable instead of opaque.
+        tail = getattr(self, '_stderr_tail', None)
+        if tail:
+            print(f"--- last stderr from {os.path.basename(self.cmd[0])} ---")
+            for line in tail:
+                print(line)
+            print("--- end stderr ---")
         if self.progress_bar:
             self.progress_bar(0.0, desc=error)
 
@@ -65,6 +73,11 @@ class SubprocessPipe:
                 time_pattern = re.compile(rb'out_time_ms=(\d+)')
                 last_percent = 0.0
                 stderr_queue = queue.Queue()
+                # Keep a tail of recent stderr lines so we can dump them on
+                # failure — without this, an FFmpeg error becomes "failed!
+                # <returncode>" with no clue what went wrong.
+                stderr_tail: list[str] = []
+                stderr_tail_max = 30
 
                 def read_stderr():
                     try:
@@ -95,6 +108,17 @@ class SubprocessPipe:
 
                     if line is None:  # sentinel = stderr closed
                         break
+                    # Buffer human-readable (non-progress) lines so we can
+                    # surface them on failure.
+                    if line and b'out_time_ms=' not in line and b'progress=' not in line:
+                        try:
+                            text = line.decode('utf-8', errors='replace').rstrip()
+                        except Exception:
+                            text = repr(line)
+                        if text:
+                            stderr_tail.append(text)
+                            if len(stderr_tail) > stderr_tail_max:
+                                del stderr_tail[0]
                     match = time_pattern.search(line)
                     if match and self.total_duration > 0:
                         current_time = int(match.group(1)) / 1_000_000
@@ -105,6 +129,8 @@ class SubprocessPipe:
                     elif b'progress=end' in line:
                         self._emit_progress(100.0)
                 stderr_thread.join()
+                # Stash the tail so _on_error can print it.
+                self._stderr_tail = stderr_tail
             else:
                 if self.progress_bar:
                     tqdm_re = re.compile(rb'(\d{1,3})%\|')

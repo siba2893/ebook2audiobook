@@ -1,13 +1,16 @@
 import { useRef, useState } from "react";
 import { uploadEbook, createTestRun } from "../api";
+import { LANGUAGES, languageLabel } from "../languages";
 
 interface Props {
+  language: string;
+  onLanguageChange: (code: string) => void;
   onUploaded: (sessionId: string, filename: string, isTestRun?: boolean) => void;
 }
 
 const ACCEPTED = ".epub,.pdf,.txt,.mobi,.azw3,.fb2,.lit,.html,.rtf,.doc";
 
-export default function UploadCard({ onUploaded }: Props) {
+export default function UploadCard({ language, onLanguageChange, onUploaded }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +49,25 @@ export default function UploadCard({ onUploaded }: Props) {
         <h2 className="mt-2 text-2xl font-semibold tracking-tight">Pick an Ebook</h2>
         <p className="mt-2 text-sm text-zinc-400">
           Supported formats: epub, pdf, mobi, azw3, fb2, lit, html, rtf, doc, txt.
+        </p>
+      </div>
+
+      <div className="surface p-4">
+        <label className="label">book language</label>
+        <select
+          className="input"
+          value={language}
+          onChange={(e) => onLanguageChange(e.target.value)}
+        >
+          {LANGUAGES.map((l) => (
+            <option key={l.code} value={l.code}>
+              {languageLabel(l.code)}
+              {l.hasBundledVoices ? "  ·  voices bundled" : ""}
+            </option>
+          ))}
+        </select>
+        <p className="mt-1 text-xs text-zinc-500">
+          Voice samples and engines are filtered to your selection. Change in step 02 if needed.
         </p>
       </div>
 

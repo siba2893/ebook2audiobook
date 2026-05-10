@@ -14,8 +14,8 @@ REM
 REM Prerequisite: run base_installation.cmd first.
 REM
 REM After this script, the WebUI engine dropdown shows ONLY Qwen3-TTS.
-REM Switch to other profiles with 1_regular_engines_install.cmd or
-REM 2_cosy_voice_engine_install.cmd.
+REM Switch to other profiles with 1_regular_engines_install.cmd,
+REM 2_cosy_voice_engine_install.cmd, or 4_f5tts_engine_install.cmd.
 REM ===========================================================================
 setlocal
 cd /d %~dp0
@@ -34,7 +34,10 @@ REM transformers/accelerate versions it needs in step 3.
     transformers accelerate faster-qwen3-tts ^
     coqui-tts fish_speech pyannote-audio gruut demucs torchvggish ^
     conformer diffusers hyperpyyaml hydra-core onnxruntime onnxruntime-gpu ^
-    deepspeed ormsgpack descript-audio-codec einops 2>nul
+    deepspeed ormsgpack descript-audio-codec einops ^
+    f5-tts vocos x_transformers torchdiffeq ema_pytorch cached_path ^
+    transformers_stream_generator pypinyin rjieba ^
+    gradio wandb datasets bitsandbytes 2>nul
 if errorlevel 1 (
     echo [WARN] pip uninstall reported errors; continuing.
 )

@@ -86,10 +86,16 @@ class VoiceExtractor:
                 else:
                     msg = 'No background detected'
                 return True, status, msg
+        except ImportError:
+            msg = 'Background detection skipped — pyannote.audio not available in this engine profile.'
+            print(msg)
+            # Return result=True (detection step "completed") + status=False (no background)
+            # so extract_voice() continues into trim/normalize using the raw WAV.
+            return True, False, msg
         except Exception as e:
             error = f'_detect_background() error: {e}'
             print(error)
-        return False, False, error
+            return False, False, error
 
     def _demucs_voice(self)->tuple[bool, str]:
         from demucs.pretrained import get_model

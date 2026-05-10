@@ -15,7 +15,8 @@ TTS_ENGINES = {
     "YOURTTS": "yourtts",
     "FISHSPEECH": "fishspeech",
     "COSYVOICE": "cosyvoice",
-    "QWEN3TTS": "qwen3tts"
+    "QWEN3TTS": "qwen3tts",
+    "F5TTS": "f5tts"
 }
 
 TTS_VOICE_CONVERSION = {
@@ -281,5 +282,28 @@ default_engine_settings = {
         "voice": default_speaker,
         "voices": {},
         "rating": {"VRAM": 6, "CPU": 2, "RAM": 6, "Realism": 5}
+    },
+    TTS_ENGINES['F5TTS']: {
+        # F5-TTS — flow-matching TTS with zero-shot voice cloning.
+        # Default model: SWivid/F5-TTS (F5TTS_v1_Base, CC-BY-NC-4.0,
+        # English + Chinese only).
+        # Spanish: jpgallegoar/F5-Spanish (cc0-1.0, 218 h Voxpopuli/TEDx,
+        # built on the older F5TTS_Base architecture — auto-selected at
+        # load time when session language is 'spa').
+        # Codebase: MIT.  https://github.com/SWivid/F5-TTS
+        "repo": "F5TTS_v1_Base",
+        "languages": {
+            "eng": "en", "zho": "zh", "spa": "es"
+        },
+        "samplerate": 24000,
+        "nfe_step": 32,
+        "cfg_strength": 2.0,
+        # Narration speed: 0.85 is steadier than the package default 1.0,
+        # which sounds rushed because F5-TTS calibrates pacing from the
+        # auto-trimmed reference clip.
+        "speed": 0.85,
+        "voice": default_speaker,
+        "voices": {},
+        "rating": {"VRAM": 3, "CPU": 2, "RAM": 4, "Realism": 5}
     }
 }

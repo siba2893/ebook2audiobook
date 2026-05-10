@@ -49,7 +49,11 @@ function statusDot(s: string): string {
   return "bg-zinc-600";
 }
 
-export default function Library() {
+interface Props {
+  onResume?: (sessionId: string, filename: string, status: string) => void;
+}
+
+export default function Library({ onResume }: Props = {}) {
   const [entries, setEntries] = useState<LibraryEntry[] | null>(null);
   const [sessions, setSessions] = useState<LibrarySession[] | null>(null);
   const [deleting, setDeleting] = useState<Set<string>>(new Set());
@@ -195,6 +199,14 @@ export default function Library() {
                       <p className="text-xs text-zinc-700 font-mono mt-0.5">{s.session_id}</p>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
+                      {onResume && s.status !== "done" && (
+                        <button
+                          className="btn text-xs"
+                          onClick={() => onResume(s.session_id, s.filename, s.status)}
+                        >
+                          resume
+                        </button>
+                      )}
                       {canFinish && (
                         <button
                           className="btn text-xs"

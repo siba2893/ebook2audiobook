@@ -10,13 +10,14 @@ REM expected packages are installed and skips pip work if they are.
 REM Use `base_installation.cmd --force` to wipe python_env/ pip packages
 REM and do a full clean reinstall.
 REM
-REM At the end, prompts you to pick one of the three engine profiles to
+REM At the end, prompts you to pick one of the four engine profiles to
 REM install on top.  Run individually later if you skip the prompt:
 REM   1_regular_engines_install.cmd      ->  XTTS, Bark, Tortoise, VITS,
 REM                                          Fairseq, GlowTTS, Tacotron2,
 REM                                          YourTTS, Fish Speech 1.5
 REM   2_cosy_voice_engine_install.cmd    ->  CosyVoice 3 only
 REM   3_qwen3tts_engine_install.cmd      ->  Qwen3-TTS only
+REM   4_f5tts_engine_install.cmd         ->  F5-TTS only
 REM ===========================================================================
 setlocal
 cd /d %~dp0
@@ -55,17 +56,19 @@ echo     [1] Regular engines    (XTTS, Bark, Tortoise, VITS, Fairseq,
 echo                             GlowTTS, Tacotron2, YourTTS, Fish Speech 1.5)
 echo     [2] CosyVoice 3        (zero-shot voice clone, Apache 2.0)
 echo     [3] Qwen3-TTS          (zero-shot voice clone)
+echo     [4] F5-TTS             (flow-matching voice clone, EN+ZH only)
 echo     [Q] Quit               (skip engine install for now)
 echo.
 
 :prompt
 set CHOICE=
-set /p CHOICE="Enter choice [1/2/3/Q]: "
+set /p CHOICE="Enter choice [1/2/3/4/Q]: "
 if /I "%CHOICE%"=="1" goto :run_regular
 if /I "%CHOICE%"=="2" goto :run_cosyvoice
 if /I "%CHOICE%"=="3" goto :run_qwen3tts
+if /I "%CHOICE%"=="4" goto :run_f5tts
 if /I "%CHOICE%"=="Q" goto :skip
-echo Invalid choice "%CHOICE%". Type 1, 2, 3, or Q.
+echo Invalid choice "%CHOICE%". Type 1, 2, 3, 4, or Q.
 goto :prompt
 
 :run_regular
@@ -80,10 +83,15 @@ exit /b %ERRORLEVEL%
 call "%~dp03_qwen3tts_engine_install.cmd"
 exit /b %ERRORLEVEL%
 
+:run_f5tts
+call "%~dp04_f5tts_engine_install.cmd"
+exit /b %ERRORLEVEL%
+
 :skip
 echo.
 echo Skipped engine install.  Run one of these whenever ready:
 echo   1_regular_engines_install.cmd
 echo   2_cosy_voice_engine_install.cmd
 echo   3_qwen3tts_engine_install.cmd
+echo   4_f5tts_engine_install.cmd
 exit /b 0

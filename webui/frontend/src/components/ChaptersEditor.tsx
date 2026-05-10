@@ -13,6 +13,7 @@ import {
   subscribeEvents,
   updateBlock,
 } from "../api";
+import { useDebugMode } from "../hooks/useDebugMode";
 
 interface Props {
   sessionId: string;
@@ -33,6 +34,8 @@ export default function ChaptersEditor({ sessionId, onStarted }: Props) {
   const [parseStatus, setParseStatus] = useState<"idle" | "parsing" | "done">("idle");
   const [parseLog, setParseLog] = useState<string[]>([]);
   const [parseProgress, setParseProgress] = useState<{ current: number; total: number } | null>(null);
+  const [lastLogLine, setLastLogLine] = useState<string>("Waiting…");
+  const [debug] = useDebugMode();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
@@ -71,6 +74,7 @@ export default function ChaptersEditor({ sessionId, onStarted }: Props) {
           const msg = e.msg;
           const m = msg.match(/Parsing chapter\s+(\d+)\s*\/\s*(\d+)/i);
           if (m) setParseProgress({ current: parseInt(m[1]), total: parseInt(m[2]) });
+          setLastLogLine(msg);
           setParseLog((prev) => [...prev, msg].slice(-120));
         }
       });
@@ -221,7 +225,7 @@ export default function ChaptersEditor({ sessionId, onStarted }: Props) {
           <div className="flex items-center justify-between text-xs text-zinc-500">
             <span className="flex items-center gap-2">
               <span className="inline-block h-1.5 w-1.5 rounded-full bg-zinc-400 animate-pulse" />
-              {parseProgress ? `Parsing chapter ${parseProgress.current} of ${parseProgress.total}` : "Loading NLP model..."}
+              {parseProgress ? `Parsing chapter ${parseProgress.current} of ${parseProgress.total}` : lastLogLine}
             </span>
             {parseProgress && <span className="font-mono">{pct}%</span>}
           </div>
@@ -230,12 +234,14 @@ export default function ChaptersEditor({ sessionId, onStarted }: Props) {
           </div>
         </div>
         {parseLog.length > 0 ? (
-          <div className="surface-muted rounded p-3 h-36 overflow-y-auto font-mono text-xs text-zinc-500 space-y-0.5">
-            {parseLog.map((line, i) => <p key={i} className="leading-snug">{line}</p>)}
+          <div className={`surface-muted rounded p-3 ${debug ? "h-96" : "h-36"} overflow-y-auto font-mono text-xs text-zinc-500 space-y-0.5`}>
+            {parseLog.map((line, i) => <p key={i} className="leading-snug whitespace-pre-wrap">{line}</p>)}
             <div ref={logEndRef} />
           </div>
         ) : (
-          <p className="text-xs text-zinc-600">Waiting for first progress event...</p>
+          <div className={`surface-muted rounded p-3 ${debug ? "h-96" : ""} flex items-center justify-center`}>
+            <p className="text-xs text-zinc-600">Waiting for first progress event...</p>
+          </div>
         )}
       </section>
     );

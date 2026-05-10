@@ -4,6 +4,7 @@ import { SessionStatus, SseEvent, cancelConversion, getSession, subscribeEvents 
 interface Props {
   sessionId: string;
   onDone: () => void;
+  onResume?: () => void;
 }
 
 function fmtSeconds(s: number): string {
@@ -18,10 +19,14 @@ function fmtSeconds(s: number): string {
   return `${h}h ${m}m`;
 }
 
-export default function ConversionProgress({ sessionId, onDone }: Props) {
+export default function ConversionProgress({ sessionId, onDone, onResume }: Props) {
   const [status, setStatus] = useState<SessionStatus | null>(null);
   const [logs, setLogs] = useState<string[]>([]);
   const [elapsed, setElapsed] = useState(0);
+  const [stopping, setStopping] = useState(false);
+  // Bumped each time we resume; the SSE subscription closes on the terminal
+  // "cancelled" event, so we need a fresh EventSource for the new run.
+  const [subKey, setSubKey] = useState(0);
   const logsRef = useRef<HTMLDivElement | null>(null);
   const startRef = useRef<number>(Date.now());
 
@@ -43,7 +48,8 @@ export default function ConversionProgress({ sessionId, onDone }: Props) {
     return () => clearInterval(t);
   }, []);
 
-  // SSE events
+  // SSE events.  The dependency on subKey makes resume re-open the stream
+  // (the prior EventSource was closed when "cancelled" arrived).
   useEffect(() => {
     const unsub = subscribeEvents(sessionId, (e: SseEvent) => {
       if (e.type === "alert") {
@@ -56,7 +62,7 @@ export default function ConversionProgress({ sessionId, onDone }: Props) {
       }
     });
     return unsub;
-  }, [sessionId]);
+  }, [sessionId, subKey]);
 
   // Auto-scroll log
   useEffect(() => {
@@ -66,7 +72,16 @@ export default function ConversionProgress({ sessionId, onDone }: Props) {
   }, [logs]);
 
   const isDone = status?.status === "done";
-  const isTerminal = isDone || status?.status === "error" || status?.status === "cancelled";
+  const isStopped = status?.status === "cancelled";
+  const isError = status?.status === "error";
+  const isTerminal = isDone || isError || isStopped;
+  const isCancelling = stopping && !isTerminal;
+
+  // Reset the local "stopping" flag once the backend confirms the stop —
+  // the SSE/poll path eventually flips status to "cancelled".
+  useEffect(() => {
+    if (isStopped && stopping) setStopping(false);
+  }, [isStopped, stopping]);
 
   const ratio = status && status.blocks_total > 0
     ? Math.min(1, status.block_resume / status.blocks_total)
@@ -128,14 +143,39 @@ export default function ConversionProgress({ sessionId, onDone }: Props) {
         <p className="text-xs text-red-400">{status.error}</p>
       )}
 
-      <div className="flex justify-between items-center">
-        <button
-          className="btn"
-          disabled={isTerminal}
-          onClick={() => cancelConversion(sessionId).catch(() => undefined)}
-        >
-          cancel
-        </button>
+      <div className="flex justify-between items-center gap-3">
+        {isStopped && onResume ? (
+          <button
+            className="btn-primary"
+            onClick={() => {
+              setStatus((s) => s ? { ...s, status: "converting" } : s);
+              setLogs([]);
+              startRef.current = Date.now();
+              setSubKey((k) => k + 1);
+              onResume();
+            }}
+          >
+            resume
+          </button>
+        ) : (
+          <button
+            className="btn"
+            disabled={isTerminal || isCancelling}
+            onClick={() => {
+              setStopping(true);
+              cancelConversion(sessionId).catch(() => setStopping(false));
+            }}
+          >
+            {isCancelling ? "stopping…" : "stop"}
+          </button>
+        )}
+        {isStopped && (
+          <p className="text-xs text-zinc-500">
+            stopped at block {status?.block_resume ?? 0}
+            {status && status.blocks_total > 0 ? ` / ${status.blocks_total}` : ""} —
+            click resume to continue from here.
+          </p>
+        )}
         {isDone && (
           <button className="btn-primary" onClick={onDone}>
             open library

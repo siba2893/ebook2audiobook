@@ -12,8 +12,8 @@ REM Prerequisite 2: third_party/CosyVoice/ must already be cloned with its
 REM Matcha-TTS submodule (git submodule update --init --recursive).
 REM
 REM After this script, the WebUI engine dropdown shows ONLY CosyVoice 3.
-REM Switch to other profiles with 1_regular_engines_install.cmd or
-REM 3_qwen3tts_engine_install.cmd.
+REM Switch to other profiles with 1_regular_engines_install.cmd,
+REM 3_qwen3tts_engine_install.cmd, or 4_f5tts_engine_install.cmd.
 REM ===========================================================================
 setlocal
 cd /d %~dp0
@@ -36,7 +36,10 @@ REM are suppressed.
 "%PY%" -m pip uninstall -y torch torchaudio torchvision torchcodec ^
     transformers accelerate qwen-tts faster-qwen3-tts flash-attn faster-whisper ^
     coqui-tts fish_speech pyannote-audio gruut demucs torchvggish ^
-    ormsgpack descript-audio-codec einops 2>nul
+    ormsgpack descript-audio-codec einops ^
+    f5-tts vocos x_transformers torchdiffeq ema_pytorch cached_path ^
+    transformers_stream_generator pypinyin rjieba ^
+    gradio wandb datasets bitsandbytes 2>nul
 if errorlevel 1 (
     echo [WARN] pip uninstall reported errors; continuing.
 )

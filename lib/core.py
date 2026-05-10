@@ -332,11 +332,12 @@ def check_programs(prog_name:str, command:str, options:str)->bool:
     try:
         subprocess.run(
             [command, options],
-            stdout=subprocess.PIPE, 
+            stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
             text=True,
-            encoding='utf-8'
+            encoding='utf-8',
+            timeout=60,
         )
         return True
     except FileNotFoundError:
@@ -887,7 +888,8 @@ def convert2epub(session_id:str)-> bool:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                encoding='utf-8'
+                encoding='utf-8',
+                timeout=300,
             )
             print(result.stdout)
             return True
@@ -2734,7 +2736,10 @@ def assemble_audio_chunks(txt_file:str, out_file:str, is_gui_process:bool)->bool
             '-safe', '0',
             '-f', 'concat',
             '-i', txt_file,
-            '-c:a', default_audio_proc_format,
+            # 'wav' is a container format, not a codec — `-c:a wav` makes
+            # FFmpeg fail with an obscure error.  All input chunks are
+            # already the same format, so copy without re-encoding.
+            '-c:a', 'copy',
             '-map_metadata', '-1',
             '-threads', '0',
             '-progress', 'pipe:2',
@@ -2919,6 +2924,18 @@ def convert_ebook(args:dict)->tuple:
             session['xtts_enable_text_splitting'] = bool(args['xtts_enable_text_splitting'])
             session['bark_text_temp'] =  float(args['bark_text_temp'])
             session['bark_waveform_temp'] =  float(args['bark_waveform_temp'])
+            # Qwen3-TTS — copied into session so the engine honours UI overrides
+            # during full conversion (preview already wires these via preview.py).
+            # Missing keys fall through to the tuned defaults baked into qwen3tts.py.
+            for _k in (
+                'qwen3tts_ref_text',
+                'qwen3tts_temperature', 'qwen3tts_top_p', 'qwen3tts_top_k',
+                'qwen3tts_repetition_penalty',
+                'qwen3tts_subtalker_temperature', 'qwen3tts_subtalker_top_p',
+                'qwen3tts_subtalker_top_k', 'qwen3tts_seed',
+            ):
+                if _k in args and args[_k] is not None:
+                    session[_k] = args[_k]
             session['output_format'] = str(args['output_format'])
             session['output_channel'] = str(args['output_channel'])
             session['output_split'] = bool(args['output_split'])
@@ -2948,11 +2965,16 @@ def convert_ebook(args:dict)->tuple:
                 if audio_pre_final_exist or audio_sentences_exist:
                     msg = f"Warning! This conversion already exists. Continue? WARNING! The whole previous conversion will be deleted!" if audio_pre_final_exist else f"Warning! Some sentences are already converted. Resume?"
                     print(msg)
-                    while True:
-                        choice = input("[s]kip / [y]es: ").strip().lower()
-                        if choice in ('s', 'y'):
-                            break
-                        print("Please enter 's', or 'y'.")
+                    auto = args.get('auto_resume')
+                    if auto in ('s', 'y'):
+                        choice = auto
+                        print(f"[auto] {choice}")
+                    else:
+                        while True:
+                            choice = input("[s]kip / [y]es: ").strip().lower()
+                            if choice in ('s', 'y'):
+                                break
+                            print("Please enter 's', or 'y'.")
                     if choice == 'y':
                         if audio_pre_final_exist:
                             delete_folder(session['process_dir'])
@@ -3049,7 +3071,7 @@ def convert_ebook(args:dict)->tuple:
                         if msg == '':
                             msg_extra = f"Using {session['device'].upper()}" + msg_extra
                         device_vram_required = default_engine_settings[session['tts_engine']]['rating']['RAM'] if session['device'] == devices['CPU']['proc'] else default_engine_settings[session['tts_engine']]['rating']['VRAM']
-                        if float(total_vram_gb) >= float(device_vram_required):
+                        if session.get('blocks_preview') or float(total_vram_gb) >= float(device_vram_required):
                             if msg:
                                 show_alert(session_id, {"type": "warning", "msg": msg + msg_extra})
                             else:

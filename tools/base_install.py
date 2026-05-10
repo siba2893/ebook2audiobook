@@ -71,6 +71,7 @@ BASE_PACKAGES: list[tuple[str, Optional[str]]] = [
     ("basedpyright", None),
     ("requests", None),
     ("soundfile", None),
+    ("markdown", None),
     # num2words ships under ext/py/num2words and is installed separately.
     ("num2words", None),
 ]
@@ -88,7 +89,7 @@ PIP_SPECS = [
     "phonemizer-fork", "pydub", "unidecode", "langdetect", "phonemizer",
     "indic-nlp-library", "stanza==1.10.1", "argostranslate==1.11.0",
     "pandas>=1.0,<4.0", "gradio>=5.49.1", "huggingface_hub>=0.36.2",
-    "basedpyright", "requests", "soundfile",
+    "basedpyright", "requests", "soundfile", "markdown",
 ]
 
 

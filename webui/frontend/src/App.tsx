@@ -4,22 +4,32 @@ import ConfigureCard from "./components/ConfigureCard";
 import ChaptersEditor from "./components/ChaptersEditor";
 import ConversionProgress from "./components/ConversionProgress";
 import Library from "./components/Library";
-import { getSession, listSessions } from "./api";
+import StatusBar from "./components/StatusBar";
+import { ConversionSettings, getSession, listSessions, startConversion } from "./api";
+import { DEFAULT_SETTINGS } from "./settings";
 
 type Stage = "upload" | "configure" | "chapters" | "running" | "library";
 
 const LS_SESSION = "ebook2audiobook:session_id";
 const LS_STAGE = "ebook2audiobook:stage";
 const LS_FILENAME = "ebook2audiobook:filename";
+const LS_LANGUAGE = "ebook2audiobook:language";
 
 export default function App() {
   const [stage, setStage] = useState<Stage>("upload");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [isTestRun, setIsTestRun] = useState(false);
+  const [language, setLanguageState] = useState<string>(() => {
+    return localStorage.getItem(LS_LANGUAGE) || "spa";
+  });
   const [resumable, setResumable] = useState<{ id: string; name: string; status: string } | null>(null);
 
-  // On first load, check for a resumable session
+  function setLanguage(code: string) {
+    setLanguageState(code);
+    localStorage.setItem(LS_LANGUAGE, code);
+  }
+
   useEffect(() => {
     const savedId = localStorage.getItem(LS_SESSION);
     const savedStage = localStorage.getItem(LS_STAGE) as Stage | null;
@@ -29,7 +39,10 @@ export default function App() {
 
     getSession(savedId)
       .then((s) => {
-        if (s.status && s.status !== "error" && s.status !== "cancelled") {
+        // Stopped/cancelled is resumable too — backend's auto_resume='y' picks
+        // up from the last persisted block_resume/sentence_resume in
+        // blocks_current.json.  Only `error` is a dead end.
+        if (s.status && s.status !== "error") {
           setResumable({
             id: savedId,
             name: savedFilename || s.filename || "unknown",
@@ -56,16 +69,31 @@ export default function App() {
     if (sessionId) persistSession(sessionId, s, filename);
   }
 
+  function resumeSession(id: string, name: string, status: string) {
+    setSessionId(id);
+    setFilename(name);
+    if (status === "done") {
+      setStage("library");
+      persistSession(id, "library", name);
+      setResumable(null);
+      return;
+    }
+    // Resume directly into running — chapters were already reviewed when /start
+    // was first clicked. Re-issue /start with saved settings; backend's
+    // auto_resume='y' continues the existing conversion in place.
+    const raw = localStorage.getItem("ebook2audiobook:settings");
+    const settings: ConversionSettings = raw
+      ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+      : { ...DEFAULT_SETTINGS, language };
+    startConversion(id, settings).catch(() => undefined);
+    setStage("running");
+    persistSession(id, "running", name);
+    setResumable(null);
+  }
+
   function resume() {
     if (!resumable) return;
-    setSessionId(resumable.id);
-    setFilename(resumable.name);
-    const s = resumable.status;
-    if (s === "done") setStage("library");
-    else if (s === "converting") setStage("running");
-    else if (s === "edit") setStage("chapters");
-    else setStage("configure");
-    setResumable(null);
+    resumeSession(resumable.id, resumable.name, resumable.status);
   }
 
   function reset() {
@@ -126,6 +154,8 @@ export default function App() {
 
           {stage === "upload" && (
             <UploadCard
+              language={language}
+              onLanguageChange={setLanguage}
               onUploaded={(sid, fname, testRun) => {
                 setSessionId(sid);
                 setFilename(fname);
@@ -140,6 +170,8 @@ export default function App() {
               sessionId={sessionId}
               filename={filename}
               isTestRun={isTestRun}
+              language={language}
+              onLanguageChange={setLanguage}
               onNext={() => {
                 if (isTestRun) {
                   advanceTo("running");
@@ -159,15 +191,16 @@ export default function App() {
             <ConversionProgress
               sessionId={sessionId}
               onDone={() => advanceTo("library")}
+              onResume={() => resumeSession(sessionId, filename || "unknown", "cancelled")}
             />
           )}
-          {stage === "library" && <Library />}
+          {stage === "library" && <Library onResume={resumeSession} />}
         </div>
       </main>
 
       <footer className="border-t border-zinc-900">
-        <div className="max-w-3xl mx-auto px-6 py-4 text-xs text-zinc-500 flex justify-between">
-          <span>monochromatic ui</span>
+        <div className="max-w-3xl mx-auto px-6 py-4 text-xs text-zinc-500 flex justify-between items-center">
+          <StatusBar />
           <a
             href="https://github.com/siba2893/ebook2audiobook"
             target="_blank"

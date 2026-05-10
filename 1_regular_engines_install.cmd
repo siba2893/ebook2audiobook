@@ -31,7 +31,10 @@ REM prompts; missing packages emit a benign warning we suppress.
     transformers accelerate qwen-tts faster-qwen3-tts flash-attn faster-whisper ^
     coqui-tts fish_speech pyannote-audio gruut demucs torchvggish ^
     conformer diffusers hyperpyyaml hydra-core onnxruntime onnxruntime-gpu ^
-    deepspeed ormsgpack descript-audio-codec einops 2>nul
+    deepspeed ormsgpack descript-audio-codec einops ^
+    f5-tts vocos x_transformers torchdiffeq ema_pytorch cached_path ^
+    transformers_stream_generator pypinyin rjieba ^
+    gradio wandb datasets bitsandbytes 2>nul
 if errorlevel 1 (
     echo [WARN] pip uninstall reported errors; continuing.
 )

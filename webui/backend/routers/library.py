@@ -59,6 +59,8 @@ async def list_library_sessions():
         sid = meta.get("session_id")
         if not sid:
             continue
+        if meta.get("is_test_run"):
+            continue
         # Try live status first, fall back to persisted metadata
         try:
             live = _session_status(sid)

@@ -116,6 +116,13 @@ ENGINE_MATRIX = {
     # Uses x_vector_only_mode for cloning so no reference transcript is needed.
     "qwen3tts":   {"language": "spa", "voice": "spa",   "text": TEXT_SPA, "samplerate": 24000,
                    "requires": ["qwen_tts"]},
+    # F5-TTS: flow-matching voice cloning via the f5-tts PyPI package.
+    # English/Chinese via F5TTS_v1_Base (Emilia ZH-EN training).
+    # Spanish via jpgallegoar/F5-Spanish (community fine-tune, F5TTS_Base
+    # architecture + Spanish vocab).  Auto-selected at engine load time.
+    # We test the Spanish path since that's the primary use case here.
+    "f5tts":      {"language": "spa", "voice": "spa", "text": TEXT_SPA, "samplerate": 24000,
+                   "requires": ["f5_tts.api"]},
 }
 
 
